@@ -32,6 +32,7 @@ import {
   Snackbar,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { timeOnly, formatDateTime } from '../utils/timezone.js';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -92,7 +93,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
             flexShrink: 0,
           }}
         >
-          {appt.counter ?? index + 1}
+          {appt.is_scheduled ? '📅' : (appt.counter ?? index + 1)}
         </Avatar>
 
         {/* Main info */}
@@ -135,18 +136,24 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
                 </Typography>
               </Box>
             )}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <TagIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-              <Typography variant="caption" color="text.secondary">
-                Queue {appt.counter ?? '—'}
-              </Typography>
-            </Box>
+            {!appt.is_scheduled && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <TagIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
+                <Typography variant="caption" color="text.secondary">
+                  Queue {appt.counter ?? '—'}
+                </Typography>
+              </Box>
+            )}
             {appt.scheduled_time && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <CalendarTodayOutlinedIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
-                  {new Date(appt.scheduled_time).toLocaleString()}
-                </Typography>
+                      {appt.scheduled_time_display
+                        ? formatDateTime(appt.scheduled_time_display)
+                        : appt.scheduled_time_with_category_tz
+                        ? formatDateTime(appt.scheduled_time_with_category_tz)
+                        : formatDateTime(appt.scheduled_time)}
+                    </Typography>
               </Box>
             )}
             {appt.organization_name && (
@@ -304,7 +311,12 @@ function AppointmentList({ category, apptType }) {
     setLoading(false);
   }, [category.id, apptType, statusFilter, token]);
 
-  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+  useEffect(() => {
+    // Call fetchAppointments inside an async IIFE to avoid synchronous setState within the effect body
+    (async () => {
+      await fetchAppointments();
+    })();
+  }, [fetchAppointments]);
 
   const showToast = (msg, severity = 'success') => setToast({ open: true, msg, severity });
 
@@ -361,21 +373,24 @@ function AppointmentList({ category, apptType }) {
     <Box>
       {/* Controls */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>Status</InputLabel>
-          <Select
-            label="Status"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ borderRadius: 2 }}
-          >
-            <MenuItem value="active">Active</MenuItem>
-            <MenuItem value="checkin">Checked In</MenuItem>
-            <MenuItem value="checkout">Checked Out</MenuItem>
-            <MenuItem value="inactive">Inactive</MenuItem>
-            <MenuItem value="cancel">Cancelled</MenuItem>
-          </Select>
-        </FormControl>
+        {/* Status filter as clickable tabs for faster switching */}
+        <Tabs
+          value={statusFilter}
+          onChange={(_, v) => setStatusFilter(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            minWidth: 240,
+            '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 40, py: 0.5 },
+            '& .MuiTabs-indicator': { height: 3, borderRadius: 2, background: 'linear-gradient(90deg, #833ab4, #fd1d1d)' },
+          }}
+        >
+          <Tab label="Active" value="active" />
+          <Tab label="Checked In" value="checkin" />
+          <Tab label="Checked Out" value="checkout" />
+          <Tab label="Inactive" value="inactive" />
+          <Tab label="Cancelled" value="cancel" />
+        </Tabs>
 
         <Tooltip title="Refresh">
           <IconButton
@@ -460,6 +475,22 @@ function AppointmentList({ category, apptType }) {
 function CategoryPanel({ category }) {
   const [apptTab, setApptTab] = useState(0); // 0 = Unscheduled, 1 = Scheduled
 
+  // If category explicitly indicates whether it's scheduled or not, render
+  // only the appropriate appointment list (no tabs). This enforces the
+  // rule that a category can only be one type.
+  if (typeof category.is_scheduled === 'boolean') {
+    return (
+      <Box>
+        {category.is_scheduled ? (
+          <AppointmentList key={`${category.id}-scheduled`} category={category} apptType="scheduled" />
+        ) : (
+          <AppointmentList key={`${category.id}-unscheduled`} category={category} apptType="unscheduled" />
+        )}
+      </Box>
+    );
+  }
+
+  // Fallback: if the category doesn't specify, keep the tabbed UI
   return (
     <Box>
       {/* Unscheduled / Scheduled sub-tabs */}
@@ -506,6 +537,9 @@ export default function AdminPage() {
   const [tabIndex, setTabIndex] = useState(0);
   const [statusUpdating, setStatusUpdating] = useState({});
   const [toast, setToast] = useState({ open: false, msg: '', severity: 'success' });
+  const [organizations, setOrganizations] = useState([]);
+  const [orgIndex, setOrgIndex] = useState(0);
+  const [categoryTabIndexMap, setCategoryTabIndexMap] = useState({});
 
   const token = localStorage.getItem('accessToken');
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -524,6 +558,16 @@ export default function AdminPage() {
         if (res.ok) {
           const data = await res.json();
           setCategories(data.results || []);
+          // Also fetch organizations so we can group categories by org
+          try {
+            const orgRes = await fetch(`${API_BASE}/organizations/?page_size=100`, { headers: authHeaders });
+            if (orgRes.ok) {
+              const orgData = await orgRes.json();
+              setOrganizations(orgData.results || []);
+            }
+          } catch (e) {
+            // ignore org fetch errors; we'll fallback to org id labels
+          }
         } else if (res.status === 401) {
           localStorage.clear();
           navigate('/');
@@ -562,7 +606,28 @@ export default function AdminPage() {
     setStatusUpdating((prev) => ({ ...prev, [category.id]: false }));
   };
 
-  const currentCategory = categories[tabIndex];
+  // Build organizations grouped with their categories for hierarchical tabs
+  const groupedOrgs = React.useMemo(() => {
+    const map = {};
+    organizations.forEach((o) => { map[o.id] = { ...o, categories: [] }; });
+    const unassigned = { id: null, name: 'Unassigned', categories: [] };
+    categories.forEach((c) => {
+      if (c.organization && map[c.organization]) {
+        map[c.organization].categories.push(c);
+      } else {
+        unassigned.categories.push(c);
+      }
+    });
+    // Only include organizations that actually have categories available to the user
+    const arr = Object.values(map).filter((o) => Array.isArray(o.categories) && o.categories.length > 0);
+    if (unassigned.categories.length) arr.push(unassigned);
+    return arr;
+  }, [organizations, categories]);
+
+  const currentOrg = groupedOrgs[orgIndex] || groupedOrgs[0] || null;
+  const currentCategory = currentOrg
+    ? (currentOrg.categories[(categoryTabIndexMap[currentOrg.id] || 0)] || null)
+    : null;
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -631,49 +696,81 @@ export default function AdminPage() {
                   mb: 3,
                 }}
               >
+                {/* Organization-level tabs */}
                 <Tabs
-                  value={tabIndex}
-                  onChange={(_, v) => setTabIndex(v)}
+                  value={orgIndex}
+                  onChange={(_, v) => setOrgIndex(v)}
                   variant="scrollable"
                   scrollButtons="auto"
                   sx={{
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                     bgcolor: 'background.paper',
-                    '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 52 },
+                    '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', minHeight: 52 },
                     '& .MuiTabs-indicator': {
                       background: 'linear-gradient(90deg, #833ab4, #fd1d1d)',
-                      height: 3,
+                      height: 4,
                       borderRadius: 2,
                     },
                   }}
                 >
-                  {categories.map((cat, i) => (
+                  {groupedOrgs.map((org, i) => (
                     <Tab
-                      key={cat.id}
+                      key={org.id ?? `unassigned-${i}`}
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <span>{cat.name || cat.description || `Category #${cat.id}`}</span>
+                          <span>{org.name || `Org #${org.id}`}</span>
                           <Chip
-                            label={cat.status}
+                            label={`${org.categories.length}`}
                             size="small"
-                            sx={{
-                              height: 18,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              bgcolor: cat.status === 'active' ? '#e8f5e9' : '#fce4ec',
-                              color: cat.status === 'active' ? '#2e7d32' : '#c62828',
-                              border: `1px solid ${cat.status === 'active' ? '#a5d6a7' : '#ef9a9a'}`,
-                            }}
+                            sx={{ height: 18, fontSize: 10, fontWeight: 700 }}
                           />
-                          {cat.is_scheduled && (
-                            <AccessTimeOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                          )}
                         </Box>
                       }
                     />
                   ))}
                 </Tabs>
+
+                {/* Category tabs for the selected organization */}
+                {currentOrg && (
+                  <Tabs
+                    value={categoryTabIndexMap[currentOrg.id] || 0}
+                    onChange={(_, v) => setCategoryTabIndexMap((prev) => ({ ...prev, [currentOrg.id]: v }))}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{
+                      '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 48 },
+                      '& .MuiTabs-indicator': { background: 'linear-gradient(90deg, #833ab4, #fd1d1d)', height: 3, borderRadius: 2 },
+                      px: 1,
+                    }}
+                  >
+                    {currentOrg.categories.map((cat, i) => (
+                      <Tab
+                        key={cat.id}
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>{cat.name || cat.description || `Category #${cat.id}`}</span>
+                            <Chip
+                              label={cat.status}
+                              size="small"
+                              sx={{
+                                height: 18,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                bgcolor: cat.status === 'active' ? '#e8f5e9' : '#fce4ec',
+                                color: cat.status === 'active' ? '#2e7d32' : '#c62828',
+                                border: `1px solid ${cat.status === 'active' ? '#a5d6a7' : '#ef9a9a'}`,
+                              }}
+                            />
+                            {cat.is_scheduled && (
+                              <AccessTimeOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                            )}
+                          </Box>
+                        }
+                      />
+                    ))}
+                  </Tabs>
+                )}
 
                 {/* Category panel content */}
                 {currentCategory && (

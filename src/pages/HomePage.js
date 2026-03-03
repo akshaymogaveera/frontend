@@ -33,6 +33,7 @@ import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import { timeOnly, formatDateTime } from '../utils/timezone.js';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
@@ -187,21 +188,22 @@ function CategoryCard({ category, onClick }) {
             {category.type && (
               <Chip label={category.type} size="small" variant="outlined" sx={{ fontSize: 11, height: 22 }} />
             )}
-            {category.estimated_time && (
+            {/* Show scheduling-related details only for scheduled categories */}
+            {category.is_scheduled && category.estimated_time && (
               <Chip
                 label={`~${category.estimated_time} min`}
                 size="small"
                 sx={{ fontSize: 11, height: 22, bgcolor: '#fff8e1', color: '#f57f17' }}
               />
             )}
-            {category.time_interval_per_appointment && (
+            {category.is_scheduled && category.time_interval_per_appointment && (
               <Chip
                 label={`${category.time_interval_per_appointment} min slots`}
                 size="small"
                 sx={{ fontSize: 11, height: 22, bgcolor: '#e8f5e9', color: '#2e7d32' }}
               />
             )}
-            {category.max_advance_days && (
+            {category.is_scheduled && category.max_advance_days && (
               <Chip
                 label={`Up to ${category.max_advance_days}d ahead`}
                 size="small"
@@ -699,15 +701,19 @@ export default function HomePage() {
                 Your appointment is confirmed
               </Typography>
               <Box sx={{ border: '1px solid', borderColor: 'success.light', borderRadius: 2, p: 2, mt: 1, textAlign: 'left' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Scheduled time:</strong>{' '}
+                    {scheduledBookingResult?.scheduled_time_display
+                      ? formatDateTime(scheduledBookingResult.scheduled_time_display)
+                      : scheduledBookingResult?.scheduled_time_with_category_tz
+                      ? formatDateTime(scheduledBookingResult.scheduled_time_with_category_tz)
+                      : (selectedSlot ? formatDateTime(selectedSlot) : '-')}
+                  </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  <strong>Scheduled time:</strong>{' '}
-                  {new Date(scheduledBookingResult.scheduled_time || selectedSlot).toLocaleString()}
+                  <strong>Status:</strong> {scheduledBookingResult.status ?? '-'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  <strong>Status:</strong> {scheduledBookingResult.status}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Appointment ID:</strong> #{scheduledBookingResult.id}
+                  <strong>Appointment ID:</strong> {scheduledBookingResult.id ? `#${scheduledBookingResult.id}` : '-'}
                 </Typography>
               </Box>
             </Box>
@@ -841,7 +847,11 @@ export default function HomePage() {
               {selectedSlot && (
                 <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(131,58,180,0.06)', border: '1px solid rgba(131,58,180,0.2)', borderRadius: 2 }}>
                   <Typography variant="body2" fontWeight={600} color="primary.dark">
-                    Selected: {new Date(selectedSlot).toLocaleString()}
+                    Selected: {scheduledBookingResult?.scheduled_time_display
+                      ? formatDateTime(scheduledBookingResult.scheduled_time_display)
+                      : scheduledBookingResult?.scheduled_time_with_category_tz
+                      ? formatDateTime(scheduledBookingResult.scheduled_time_with_category_tz)
+                      : formatDateTime(selectedSlot)}
                   </Typography>
                 </Box>
               )}
@@ -932,8 +942,8 @@ export default function HomePage() {
               </Typography>
               <Box sx={{ border: '1px solid', borderColor: 'success.light', borderRadius: 2, p: 2, mt: 1, textAlign: 'left' }}>
                 <Typography variant="body2" color="text.secondary"><strong>Queue position:</strong> #{bookingResult.counter}</Typography>
-                <Typography variant="body2" color="text.secondary"><strong>Status:</strong> {bookingResult.status}</Typography>
-                <Typography variant="body2" color="text.secondary"><strong>Appointment ID:</strong> #{bookingResult.id}</Typography>
+                <Typography variant="body2" color="text.secondary"><strong>Status:</strong> {bookingResult.status ?? '-'}</Typography>
+                <Typography variant="body2" color="text.secondary"><strong>Appointment ID:</strong> {bookingResult.id ? `#${bookingResult.id}` : '-'}</Typography>
                 {bookingResult.estimated_time && (
                   <Typography variant="body2" color="text.secondary"><strong>Estimated wait:</strong> {bookingResult.estimated_time}</Typography>
                 )}

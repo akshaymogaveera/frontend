@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+// import { formatToCategoryTimezone } from '../utils/timezone.js';
 import { useNavigate } from 'react-router-dom';
+import { timeOnly, formatDateTime, formatDate } from '../utils/timezone.js';
 import {
   Box,
   Typography,
@@ -111,16 +113,22 @@ function AppointmentRow({ appt, onClick }) {
           <Typography variant="body1" fontWeight={700} noWrap sx={{ maxWidth: isMobile ? 180 : 220 }}>
             {appt.organization_name || `Org #${appt.organization}`}
           </Typography>
-          <Chip
-            label={cfg.label}
-            size="small"
-            sx={{ fontWeight: 700, fontSize: 11, height: 20, bgcolor: cfg.bg, color: cfg.text, border: 'none' }}
-          />
+          {appt.status && (
+            <Chip
+              label={cfg.label}
+              size="small"
+              sx={{ fontWeight: 700, fontSize: 11, height: 20, bgcolor: cfg.bg, color: cfg.text, border: 'none' }}
+            />
+          )}
         </Box>
         <Typography variant="body2" color="text.secondary" noWrap>
           {appt.category_name || `Category #${appt.category}`}
           {appt.is_scheduled && appt.scheduled_time
-            ? ` · 📅 ${new Date(appt.scheduled_time).toLocaleString()}`
+          ? ` · 📅 ${appt.scheduled_time_display
+              ? formatDateTime(appt.scheduled_time_display)
+              : appt.scheduled_time_with_category_tz
+              ? formatDateTime(appt.scheduled_time_with_category_tz)
+              : formatDateTime(appt.scheduled_time)}`
             : ' · 🚶 Walk-in'}
         </Typography>
       </Box>
@@ -128,7 +136,7 @@ function AppointmentRow({ appt, onClick }) {
       {/* Right side */}
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 2, flexShrink: 0 }}>
         <Typography variant="caption" color="text.disabled">
-          {new Date(appt.date_created).toLocaleDateString()}
+          {formatDate(appt.date_created)}
         </Typography>
         <ChevronRightIcon sx={{ fontSize: 18, color: 'text.disabled', mt: 0.3 }} />
       </Box>
@@ -258,14 +266,18 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
               <DetailRow
                 icon={<CalendarTodayOutlinedIcon color="primary" />}
                 label="Scheduled Time"
-                value={new Date(appt.scheduled_time).toLocaleString()}
+                value={appt.scheduled_time_display
+                  ? formatDateTime(appt.scheduled_time_display)
+                  : appt.scheduled_time_with_category_tz
+                  ? formatDateTime(appt.scheduled_time_with_category_tz)
+                  : formatDateTime(appt.scheduled_time)}
                 highlight
               />
               {appt.scheduled_end_time && (
                 <DetailRow
                   icon={<CalendarTodayOutlinedIcon sx={{ opacity: 0.5 }} />}
                   label="End Time"
-                  value={new Date(appt.scheduled_end_time).toLocaleString()}
+                  value={formatDateTime(appt.scheduled_end_time)}
                 />
               )}
             </>
@@ -275,7 +287,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
             <DetailRow
               icon={<LogoutOutlinedIcon sx={{ color: '#4527a0' }} />}
               label="Checked Out At"
-              value={new Date(appt.checkout_time).toLocaleString()}
+              value={formatDateTime(appt.checkout_time, true)}
               highlight
             />
           )}
@@ -285,7 +297,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
           <DetailRow
             icon={<AccessTimeOutlinedIcon sx={{ color: 'text.disabled' }} />}
             label="Created"
-            value={new Date(appt.date_created).toLocaleString()}
+            value={formatDateTime(appt.date_created, true)}
           />
           <DetailRow
             icon={<TagIcon sx={{ color: 'text.disabled' }} />}
