@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTP Verification</title>
+  <script src="./sendOtp.js" defer></script>
+  <script src="./verifyOtp.js" defer></script>
+</head>
+<body>
+  <h1>OTP Verification</h1>
+
+  <!-- Form for sending OTP -->
+  <form id="sendOtpForm">
+    <label for="email">Email:</label>
+    <input type="email" id="email" name="email" required>
+    <button type="submit">Send OTP</button>
+  </form>
+
+  <hr>
+
+  <!-- Form for verifying OTP -->
+  <form id="verifyOtpForm">
+    <label for="otpEmail">Email:</label>
+    <input type="email" id="otpEmail" name="otpEmail" required>
+    <label for="otp">OTP:</label>
+    <input type="text" id="otp" name="otp" required>
+    <button type="submit">Verify OTP</button>
+  </form>
+
+  <script>
+    // Attach event listeners to the forms
+    document.getElementById('sendOtpForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = document.getElementById('email').value;
+      await sendOtp(email);
+    });
+
+    document.getElementById('verifyOtpForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = document.getElementById('otpEmail').value;
+      const otp = document.getElementById('otp').value;
+      await verifyOtp(email, otp);
+    });
+  </script>
+</body>
+</html>
