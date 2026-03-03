@@ -34,12 +34,14 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import IconButton from '@mui/material/IconButton';
 import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
 
 const API_BASE = '/api';
 
@@ -118,14 +120,14 @@ function CategoryCard({ cat, onSelect }) {
                     sx={{ height: 20, fontSize: 11, bgcolor: '#fff8e1', color: '#f57f17' }}
                   />
                 )}
-                {cat.time_interval_per_appointment && (
+                {isScheduled && cat.time_interval_per_appointment && (
                   <Chip
                     label={`${cat.time_interval_per_appointment} min slots`}
                     size="small"
                     sx={{ height: 20, fontSize: 11, bgcolor: '#e8f5e9', color: '#2e7d32' }}
                   />
                 )}
-                {cat.max_advance_days && (
+                {isScheduled && cat.max_advance_days && (
                   <Chip
                     label={`Book up to ${cat.max_advance_days}d ahead`}
                     size="small"
@@ -162,7 +164,20 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
         onSuccess();
       } else {
         const data = await res.json();
-        setError(data.detail || data.errors || 'Booking failed. Please try again.');
+        // Normalize error into a readable string to avoid rendering objects directly
+        let errorMsg = 'Booking failed. Please try again.';
+        if (data.detail) errorMsg = data.detail;
+        else if (data.errors) {
+          if (typeof data.errors === 'string') errorMsg = data.errors;
+          else {
+            // pick the first message from the first key
+            const first = Object.values(data.errors)[0];
+            if (Array.isArray(first)) errorMsg = first[0];
+            else if (typeof first === 'string') errorMsg = first;
+            else errorMsg = JSON.stringify(data.errors);
+          }
+        }
+        setError(errorMsg);
       }
     } catch {
       setError('Network error. Please try again.');
@@ -179,7 +194,12 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
       PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
     >
       <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d)' }} />
-      <DialogTitle sx={{ fontWeight: 700 }}>Join Walk-in Queue</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        Join Walk-in Queue
+        <IconButton size="small" onClick={() => !loading && onClose()} sx={{ color: 'text.secondary' }}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary">
           You are joining the walk-in queue for <strong>{category?.name || category?.description}</strong>.
@@ -190,19 +210,26 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
         <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>
           Cancel
         </Button>
-        <Button
-          onClick={handleBook}
-          variant="contained"
-          disabled={loading}
-          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
-          sx={{
-            borderRadius: 2,
-            background: 'linear-gradient(45deg, #833ab4, #fd1d1d)',
-            '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' },
-          }}
-        >
-          {loading ? 'Booking…' : 'Confirm'}
-        </Button>
+        {(() => {
+          // If the API reported that the appointment already exists, hide the Confirm button
+          const isAlreadyExists = error && /already exists/i.test(error);
+          if (isAlreadyExists) return null;
+          return (
+            <Button
+              onClick={handleBook}
+              variant="contained"
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
+              sx={{
+                borderRadius: 2,
+                background: 'linear-gradient(45deg, #833ab4, #fd1d1d)',
+                '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' },
+              }}
+            >
+              {loading ? 'Booking…' : 'Confirm'}
+            </Button>
+          );
+        })()}
       </DialogActions>
     </Dialog>
   );
@@ -244,7 +271,13 @@ export default function OrgBookingPage() {
     setLoading(false);
   }, [orgId]);
 
-  useEffect(() => { fetchLanding(); }, [fetchLanding]);
+  useEffect(() => {
+    // Call fetchLanding in an async IIFE to avoid synchronous setState inside
+    // the effect body (prevents cascading renders and satisfies the linter).
+    (async () => {
+      await fetchLanding();
+    })();
+  }, [fetchLanding]);
 
   const handleCategorySelect = (cat) => {
     if (!isLoggedIn) {
@@ -255,8 +288,9 @@ export default function OrgBookingPage() {
     }
     if (cat.is_scheduled) {
       // For scheduled categories, go to HomePage with category pre-selected
-      // (full slot picker lives there — keeps logic DRY for now)
-      navigate('/home', { state: { preSelectOrgId: orgId, preSelectCatId: cat.id } });
+      // Pass the org and category objects in location.state so Home can
+      // immediately open the slot picker without an extra fetch.
+      navigate('/home', { state: { preSelectOrg: org, preSelectCat: cat } });
     } else {
       setSelectedCat(cat);
     }

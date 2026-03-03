@@ -32,7 +32,7 @@ import {
   Snackbar,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { timeOnly, formatDateTime } from '../utils/timezone.js';
+import { timeOnly, formatDateTime, formatServerDateTime } from '../utils/timezone.js';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -148,11 +148,11 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <CalendarTodayOutlinedIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
-                      {appt.scheduled_time_display
-                        ? formatDateTime(appt.scheduled_time_display)
-                        : appt.scheduled_time_with_category_tz
-                        ? formatDateTime(appt.scheduled_time_with_category_tz)
-                        : formatDateTime(appt.scheduled_time)}
+            {appt.scheduled_time_display
+              ? appt.scheduled_time_display
+              : appt.scheduled_time_with_category_tz
+              ? appt.scheduled_time_with_category_tz
+              : formatServerDateTime(appt.scheduled_time)}
                     </Typography>
               </Box>
             )}

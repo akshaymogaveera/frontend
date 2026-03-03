@@ -38,7 +38,25 @@ export function formatResponseTimeWithZone(input) { return input || ''; }
 export function formatDateTime(inputStr, includeSeconds = false) {
   if (!inputStr) return '';
   const s = String(inputStr);
-  // Match YYYY-MM-DDTHH:MM[:SS][...]
+  // If the string contains an explicit timezone designator (Z or ±HH:MM),
+  // parse it as an absolute instant and format in the user's locale so the
+  // created/updated timestamps look like "just now" to the user.
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) {
+    try {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', ...(includeSeconds ? { second: '2-digit' } : {}),
+        });
+      }
+    } catch (err) {
+      // fall through to pattern extraction
+    }
+  }
+
+  // Match YYYY-MM-DDTHH:MM[:SS][...] (no timezone information) — treat as
+  // server-provided local/naive timestamp and display the fields as-is.
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
   if (m) {
     const year = m[1];
@@ -93,4 +111,78 @@ export function formatDate(inputStr) {
     }
   } catch (err) {}
   return s;
+}
+
+/**
+ * formatDateLocal(inputStr)
+ * - Always parses the input as a Date and formats it in the user's locale as
+ *   a short date (e.g. "05 Mar 2026"). If parsing fails, falls back to
+ *   the original string.
+ */
+export function formatDateLocal(inputStr) {
+  if (!inputStr) return '';
+  try {
+    const s = String(inputStr);
+    // If the server returned a naive ISO datetime (no timezone designator),
+    // interpret it as UTC so we can present it in the user's local timezone.
+    const naiveIso = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(?::\d{2})?$/;
+    const parsed = naiveIso.test(s) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) ? new Date(s + 'Z') : new Date(s);
+    const d = parsed;
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+  } catch (err) {
+    // ignore
+  }
+  return String(inputStr);
+}
+
+/**
+ * formatDateTimeLocal(inputStr, includeSeconds=false)
+ * - Parses the input as an absolute instant (if possible) and formats it in
+ *   the user's locale including time. Falls back to the original input when
+ *   parsing fails.
+ */
+export function formatDateTimeLocal(inputStr, includeSeconds = false) {
+  if (!inputStr) return '';
+  try {
+    const s = String(inputStr);
+    const naiveIso = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}(?::\d{2})?$/;
+    const d = naiveIso.test(s) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s) ? new Date(s + 'Z') : new Date(s);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', ...(includeSeconds ? { second: '2-digit' } : {}),
+      });
+    }
+  } catch (err) {}
+  return String(inputStr);
+}
+
+/**
+ * formatServerDateTime(inputStr, includeSeconds=false)
+ * - Do NOT perform timezone conversion. Extract the date/time fields from an
+ *   ISO-like input and present them in a human-friendly form (e.g. "04 Mar 2026, 09:30").
+ * - This is intended for scheduled times which should be shown exactly as the
+ *   server provided (no interpretation as a different instant in the client's timezone).
+ */
+export function formatServerDateTime(inputStr, includeSeconds = false) {
+  if (!inputStr) return '';
+  const s = String(inputStr);
+  // Match YYYY-MM-DDTHH:MM[:SS] optionally followed by timezone info — we ignore the timezone part
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const year = m[1];
+    const month = m[2];
+    const day = m[3];
+    const hour = m[4];
+    const minute = m[5];
+    const second = m[6] || '00';
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const dayNum = String(parseInt(day, 10));
+    const monthName = MONTHS[parseInt(month, 10) - 1] || month;
+    return `${dayNum} ${monthName} ${year}, ${hour}:${minute}${includeSeconds ? `:${second}` : ''}`;
+  }
+  // Fallback to formatDateTime which will try other heuristics but avoid converting to local time
+  return formatDateTime(s, includeSeconds);
 }

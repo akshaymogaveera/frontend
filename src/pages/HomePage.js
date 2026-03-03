@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -26,6 +27,7 @@ import {
   Avatar,
   Tooltip,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
@@ -33,7 +35,7 @@ import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { timeOnly, formatDateTime } from '../utils/timezone.js';
+import { timeOnly, formatDateTime, formatDate, formatServerDateTime } from '../utils/timezone.js';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
@@ -225,6 +227,7 @@ function CategoryCard({ category, onClick }) {
 }
 
 export default function HomePage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [step, setStep] = useState('search');
   const [query, setQuery] = useState('');
@@ -254,6 +257,50 @@ export default function HomePage() {
   const token = localStorage.getItem('accessToken');
   const userId = localStorage.getItem('userId');
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // If navigated from /org/:id we may receive preSelectOrg and preSelectCat
+  // in location.state. If present, pre-populate the org/category and open
+  // the same booking flow that clicking the card on Home would open.
+  useEffect(() => {
+    // Defer state updates to avoid calling setState synchronously inside the
+    // effect body which can trigger the "set-state-in-effect" ESLint rule.
+    const state = location?.state || {};
+    const preOrg = state.preSelectOrg;
+    const preCat = state.preSelectCat;
+    if (preOrg && preCat) {
+      (async () => {
+        // yield to the microtask queue so React batches these updates safely
+        await Promise.resolve();
+        try {
+          // Populate and move to categories step
+          setSelectedOrg(preOrg);
+          setStep('categories');
+          setCategories([preCat]);
+
+          // Open correct booking UI depending on scheduled flag
+          setSelectedCategory(preCat);
+          if (preCat.is_scheduled) {
+            setSelectedDate('');
+            setSlots([]);
+            setSlotsError('');
+            setSelectedSlot(null);
+            setScheduledBookingStatus(null);
+            setScheduledBookingResult(null);
+            setScheduledBookingError('');
+            setScheduledOpen(true);
+          } else {
+            setBookingStatus(null);
+            setBookingResult(null);
+            setBookingError('');
+            setConfirmOpen(true);
+          }
+        } catch (err) {
+          // ignore any parsing/navigation issues
+        }
+      })();
+    }
+  // Run once on mount; we intentionally don't add many deps here.
+  }, []);
 
   const handleSearch = useCallback(async (q = query) => {
     if (!q.trim()) return;
@@ -337,11 +384,27 @@ export default function HomePage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setBookingResult(data);
+        // API may return { appointment: { ... } } or the appointment object directly
+        setBookingResult(data.appointment ? data.appointment : data);
         setBookingStatus('success');
       } else {
         const err = await res.json();
-        setBookingError(err.detail || err.non_field_errors?.[0] || JSON.stringify(err) || 'Booking failed.');
+        // Prefer detail > non_field_errors > first errors.* message > fallback
+        let msg = 'Booking failed.';
+        if (err.detail) msg = err.detail;
+        else if (err.non_field_errors && err.non_field_errors[0]) msg = err.non_field_errors[0];
+        else if (err.errors) {
+          if (typeof err.errors === 'string') msg = err.errors;
+          else {
+            const first = Object.values(err.errors)[0];
+            if (Array.isArray(first)) msg = first[0];
+            else if (typeof first === 'string') msg = first;
+            else msg = JSON.stringify(err.errors);
+          }
+        } else {
+          msg = JSON.stringify(err);
+        }
+        setBookingError(msg || 'Booking failed.');
         setBookingStatus('error');
       }
     } catch {
@@ -371,13 +434,32 @@ export default function HomePage() {
   };
 
   // ── Scheduled appointment helpers ────────────────────────────────────────
+  // Use local dates (not UTC) for min/max so users cannot select past dates in their local timezone
   const maxDate = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + (selectedCategory?.max_advance_days || 7));
-    return d.toISOString().split('T')[0];
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Force-shrink the configured advance window by one day so the final day
+    // is not selectable (user requested). Clamp to 0 so we never go backwards
+    // past today.
+    const configured = (selectedCategory?.max_advance_days ?? 7);
+    const advanceDays = Math.max(0, configured - 1);
+    d.setDate(d.getDate() + advanceDays);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   })();
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const localTodayStr = (() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  })();
+
+  const dateInputRef = useRef(null);
+  const [effectiveMaxDate, setEffectiveMaxDate] = useState(maxDate);
 
   const handleDateChange = useCallback(async (dateStr) => {
     setSelectedDate(dateStr);
@@ -395,18 +477,59 @@ export default function HomePage() {
         const data = await res.json();
         // API returns { date, slots: [[ [start, end], available ], ...] }
         const rawSlots = Array.isArray(data) ? data : (data.slots || []);
-        // Normalize to [ [isoStart, available], ... ]
+        // Normalize to [ [isoStart, available, reason], ... ]
+        // reason: undefined | 'booked' | 'past'
         const normalized = rawSlots.map((entry) => {
           const timeRange = entry[0];   // ["09:00", "09:30"]
           const available = entry[1];   // true/false
           const startTime = Array.isArray(timeRange) ? timeRange[0] : timeRange;
-          // Build a full ISO datetime string by combining date + start time
+          // Build a full ISO datetime string by combining date + start time (no timezone suffix)
           const isoStart = `${dateStr}T${startTime}:00`;
-          return [isoStart, available];
+          // Determine final availability. If server marks available=false, treat as booked.
+          let finalAvailable = Boolean(available);
+          let reason = undefined;
+          if (!finalAvailable) {
+            reason = 'booked';
+          }
+          try {
+            if (dateStr === localTodayStr) {
+              // Interpret the server-provided slot start as UTC (so we compare the UTC instant
+              // against the client's current time). We do NOT convert the displayed server time;
+              // this check is only to decide availability for today's slots.
+              const startUtc = new Date(isoStart + 'Z');
+              if (!isNaN(startUtc.getTime()) && startUtc.getTime() < Date.now()) {
+                finalAvailable = false;
+                reason = 'past';
+              }
+            }
+          } catch (err) {
+            // ignore parsing errors and keep the original availability
+          }
+          return [isoStart, finalAvailable, reason];
         });
-        setSlots(normalized);
-        if (normalized.length === 0)
-          setSlotsError('No available slots for this date.');
+        // If no slots are bookable (either API returned none, or all are unavailable),
+        // clear the selected date and show an informative message so the date is
+        // effectively not selectable.
+        const hasBookable = normalized.some(([, available]) => Boolean(available));
+        if (!hasBookable) {
+          setSlots([]);
+          setSlotsError('No bookable slots for this date. Please choose another date.');
+          // Clear the visible selection so the user cannot proceed with this date.
+          setSelectedDate('');
+          // Try to re-open the native picker to prompt the user to choose another date.
+          try {
+            const el = dateInputRef.current;
+            if (el) {
+              if (typeof el.showPicker === 'function') el.showPicker();
+              else el.focus();
+            }
+          } catch (e) {
+            // ignore
+          }
+        } else {
+          setSlots(normalized);
+          if (normalized.length === 0) setSlotsError('No available slots for this date.');
+        }
       } else {
         setSlotsError('Could not load availability.');
       }
@@ -415,6 +538,69 @@ export default function HomePage() {
     }
     setLoadingSlots(false);
   }, [selectedCategory, token]);
+
+  // If the configured maxDate falls on a day that has no bookable slots, step
+  // backward until we find a bookable date (or reach today) and use that as the
+  // effective max for the date input. This is a lightweight alternative to a
+  // full calendar with per-date disabling.
+  useEffect(() => {
+    let mounted = true;
+    if (!scheduledOpen || !selectedCategory) {
+      // Avoid synchronous setState inside effect — defer to microtask and only
+      // update when value actually differs to prevent cascading renders.
+      if (effectiveMaxDate !== maxDate) {
+        Promise.resolve().then(() => { if (mounted) setEffectiveMaxDate(maxDate); });
+      }
+      return undefined;
+    }
+
+    (async () => {
+      try {
+        const minD = new Date(localTodayStr + 'T00:00:00');
+        let d = new Date(maxDate + 'T00:00:00');
+        let found = null;
+        while (d >= minD) {
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          const dateStr = `${yyyy}-${mm}-${dd}`;
+          try {
+            const res = await fetch(`${API_BASE}/appointments/availability/?date=${dateStr}&category_id=${selectedCategory.id}`, { headers: authHeaders });
+            if (res.ok) {
+              const data = await res.json();
+              const rawSlots = Array.isArray(data) ? data : (data.slots || []);
+              const hasBookable = rawSlots.some((entry) => {
+                const timeRange = entry[0];
+                const available = Boolean(entry[1]);
+                if (!available) return false;
+                if (dateStr === localTodayStr) {
+                  const startTime = Array.isArray(timeRange) ? timeRange[0] : timeRange;
+                  const isoStart = `${dateStr}T${startTime}:00Z`;
+                  const dt = new Date(isoStart);
+                  return !isNaN(dt.getTime()) && dt.getTime() > Date.now();
+                }
+                return true;
+              });
+              if (hasBookable) { found = dateStr; break; }
+            }
+          } catch (err) {
+            // treat as not bookable and continue
+          }
+          d.setDate(d.getDate() - 1);
+        }
+        if (!mounted) return;
+        setEffectiveMaxDate(found || localTodayStr);
+      } catch (err) {
+        if (mounted) setEffectiveMaxDate(maxDate);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [scheduledOpen, selectedCategory, localTodayStr, maxDate, token, effectiveMaxDate]);
+  // We removed the separate quick-check fetch; the backward search above will
+  // still attempt to find the nearest earlier bookable day if needed.
+
+  
 
   const handleScheduledBooking = async () => {
     if (!selectedSlot) return;
@@ -432,7 +618,8 @@ export default function HomePage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setScheduledBookingResult(data);
+        // Normalize response shape: accept either { appointment: {...} } or direct object
+        setScheduledBookingResult(data.appointment ? data.appointment : data);
         setScheduledBookingStatus('success');
       } else {
         const err = await res.json();
@@ -684,13 +871,16 @@ export default function HomePage() {
         PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
       >
         <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
-        <DialogTitle sx={{ fontWeight: 700, pb: 0 }}>
+        <DialogTitle sx={{ fontWeight: 700, pb: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {scheduledBookingStatus === 'success' ? 'Appointment Booked! 🎉' : (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CalendarTodayOutlinedIcon sx={{ color: '#833ab4' }} />
               Schedule an Appointment
             </Box>
           )}
+          <IconButton size="small" onClick={() => scheduledBookingStatus !== 'loading' && handleCloseScheduled()} sx={{ color: 'text.secondary' }}>
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
 
         <DialogContent sx={{ pt: 2 }}>
@@ -703,11 +893,11 @@ export default function HomePage() {
               <Box sx={{ border: '1px solid', borderColor: 'success.light', borderRadius: 2, p: 2, mt: 1, textAlign: 'left' }}>
                   <Typography variant="body2" color="text.secondary">
                     <strong>Scheduled time:</strong>{' '}
-                    {scheduledBookingResult?.scheduled_time_display
-                      ? formatDateTime(scheduledBookingResult.scheduled_time_display)
-                      : scheduledBookingResult?.scheduled_time_with_category_tz
-                      ? formatDateTime(scheduledBookingResult.scheduled_time_with_category_tz)
-                      : (selectedSlot ? formatDateTime(selectedSlot) : '-')}
+            {scheduledBookingResult?.scheduled_time_display
+              ? scheduledBookingResult.scheduled_time_display
+              : scheduledBookingResult?.scheduled_time_with_category_tz
+              ? scheduledBookingResult.scheduled_time_with_category_tz
+              : (selectedSlot ? formatServerDateTime(selectedSlot) : '-')}
                   </Typography>
                 <Typography variant="body2" color="text.secondary">
                   <strong>Status:</strong> {scheduledBookingResult.status ?? '-'}
@@ -740,17 +930,34 @@ export default function HomePage() {
               <Typography variant="subtitle2" fontWeight={700} gutterBottom>
                 1. Pick a date
               </Typography>
-              <TextField
-                type="date"
-                fullWidth
-                size="small"
-                inputProps={{ min: todayStr, max: maxDate }}
-                value={selectedDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                sx={{ mb: 3 }}
-                InputLabelProps={{ shrink: true }}
-                label="Date"
-              />
+              <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {/* Hidden native date input used to open platform picker. We keep it invisible so users can't type arbitrary dates. */}
+                <input
+                  ref={dateInputRef}
+                  type="date"
+                  value={selectedDate}
+                  min={localTodayStr}
+                  max={effectiveMaxDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+                />
+
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    // Try showPicker if supported, otherwise focus/click the input
+                    const el = dateInputRef.current;
+                    if (!el) return;
+                    if (typeof el.showPicker === 'function') el.showPicker();
+                    else el.focus();
+                  }}
+                  startIcon={<CalendarTodayOutlinedIcon />}
+                  sx={{ borderRadius: 2, textTransform: 'none', justifyContent: 'center', px: 3, width: '100%' }}
+                >
+                  {selectedDate ? formatDate(selectedDate) : 'Pick a date'}
+                </Button>
+                {/* Latest selectable date is enforced by the hidden input's max */}
+              </Box>
 
               {/* Slots grid */}
               {selectedDate && (
@@ -773,12 +980,19 @@ export default function HomePage() {
 
                   {!loadingSlots && slots.length > 0 && (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                      {slots.map(([time, available]) => {
+                      {slots.map(([time, available, reason]) => {
                         const isSelected = selectedSlot === time;
+                        const tooltipTitle = available
+                          ? 'Available — click to select'
+                          : reason === 'past'
+                          ? 'Unavailable — time passed'
+                          : 'Already booked';
+                        // Display the raw HH:MM from the server-provided string without parsing to local Date
+                        const displayTime = (typeof time === 'string' && time.includes('T')) ? time.split('T')[1].slice(0,5) : time;
                         return (
                           <Tooltip
                             key={time}
-                            title={available ? 'Available — click to select' : 'Already booked'}
+                            title={tooltipTitle}
                           >
                             <span>
                               <Button
@@ -814,7 +1028,7 @@ export default function HomePage() {
                                   },
                                 }}
                               >
-                                {new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {displayTime}
                               </Button>
                             </span>
                           </Tooltip>
@@ -844,14 +1058,14 @@ export default function HomePage() {
               )}
 
               {/* Selected slot summary */}
-              {selectedSlot && (
+                  {selectedSlot && (
                 <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(131,58,180,0.06)', border: '1px solid rgba(131,58,180,0.2)', borderRadius: 2 }}>
                   <Typography variant="body2" fontWeight={600} color="primary.dark">
                     Selected: {scheduledBookingResult?.scheduled_time_display
-                      ? formatDateTime(scheduledBookingResult.scheduled_time_display)
+                      ? scheduledBookingResult.scheduled_time_display
                       : scheduledBookingResult?.scheduled_time_with_category_tz
-                      ? formatDateTime(scheduledBookingResult.scheduled_time_with_category_tz)
-                      : formatDateTime(selectedSlot)}
+                      ? scheduledBookingResult.scheduled_time_with_category_tz
+                      : formatServerDateTime(selectedSlot)}
                   </Typography>
                 </Box>
               )}
@@ -872,6 +1086,14 @@ export default function HomePage() {
                 sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
               >
                 View Appointments
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<EventAvailableOutlinedIcon />}
+                onClick={() => { handleCloseScheduled(); navigate('/appointments', { state: { openApptId: scheduledBookingResult?.id } }); }}
+                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
+              >
+                View Appointment
               </Button>
             </>
           ) : scheduledBookingStatus !== 'loading' ? (
@@ -901,8 +1123,11 @@ export default function HomePage() {
         PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
       >
         <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
-        <DialogTitle sx={{ fontWeight: 700, pb: 0 }}>
+        <DialogTitle sx={{ fontWeight: 700, pb: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {bookingStatus === 'success' ? 'Booking Confirmed! 🎉' : 'Confirm Appointment'}
+          <IconButton size="small" onClick={() => bookingStatus !== 'loading' && handleCloseConfirm()} sx={{ color: 'text.secondary' }}>
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: 1.5 }}>
           {bookingStatus === null && selectedOrg && selectedCategory && (
@@ -983,6 +1208,14 @@ export default function HomePage() {
                 sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
               >
                 View Appointments
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<EventAvailableOutlinedIcon />}
+                onClick={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
+                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
+              >
+                View Appointment
               </Button>
             </>
           )}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 // import { formatToCategoryTimezone } from '../utils/timezone.js';
 import { useNavigate } from 'react-router-dom';
-import { timeOnly, formatDateTime, formatDate } from '../utils/timezone.js';
+import { timeOnly, formatDateTime, formatDate, formatDateTimeLocal, formatDateLocal, formatServerDateTime } from '../utils/timezone.js';
 import {
   Box,
   Typography,
@@ -125,10 +126,10 @@ function AppointmentRow({ appt, onClick }) {
           {appt.category_name || `Category #${appt.category}`}
           {appt.is_scheduled && appt.scheduled_time
           ? ` · 📅 ${appt.scheduled_time_display
-              ? formatDateTime(appt.scheduled_time_display)
+              ? appt.scheduled_time_display
               : appt.scheduled_time_with_category_tz
-              ? formatDateTime(appt.scheduled_time_with_category_tz)
-              : formatDateTime(appt.scheduled_time)}`
+              ? appt.scheduled_time_with_category_tz
+              : formatServerDateTime(appt.scheduled_time)}`
             : ' · 🚶 Walk-in'}
         </Typography>
       </Box>
@@ -136,7 +137,7 @@ function AppointmentRow({ appt, onClick }) {
       {/* Right side */}
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 2, flexShrink: 0 }}>
         <Typography variant="caption" color="text.disabled">
-          {formatDate(appt.date_created)}
+          {formatDateLocal(appt.date_created)}
         </Typography>
         <ChevronRightIcon sx={{ fontSize: 18, color: 'text.disabled', mt: 0.3 }} />
       </Box>
@@ -267,17 +268,17 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
                 icon={<CalendarTodayOutlinedIcon color="primary" />}
                 label="Scheduled Time"
                 value={appt.scheduled_time_display
-                  ? formatDateTime(appt.scheduled_time_display)
+                  ? appt.scheduled_time_display
                   : appt.scheduled_time_with_category_tz
-                  ? formatDateTime(appt.scheduled_time_with_category_tz)
-                  : formatDateTime(appt.scheduled_time)}
+                  ? appt.scheduled_time_with_category_tz
+                  : formatServerDateTime(appt.scheduled_time)}
                 highlight
               />
               {appt.scheduled_end_time && (
                 <DetailRow
                   icon={<CalendarTodayOutlinedIcon sx={{ opacity: 0.5 }} />}
                   label="End Time"
-                  value={formatDateTime(appt.scheduled_end_time)}
+                  value={formatServerDateTime(appt.scheduled_end_time)}
                 />
               )}
             </>
@@ -287,7 +288,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
             <DetailRow
               icon={<LogoutOutlinedIcon sx={{ color: '#4527a0' }} />}
               label="Checked Out At"
-              value={formatDateTime(appt.checkout_time, true)}
+              value={formatServerDateTime(appt.checkout_time, true)}
               highlight
             />
           )}
@@ -297,7 +298,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
           <DetailRow
             icon={<AccessTimeOutlinedIcon sx={{ color: 'text.disabled' }} />}
             label="Created"
-            value={formatDateTime(appt.date_created, true)}
+            value={formatDateTimeLocal(appt.date_created, true)}
           />
           <DetailRow
             icon={<TagIcon sx={{ color: 'text.disabled' }} />}
@@ -357,6 +358,7 @@ function DetailRow({ icon, label, value, highlight }) {
 
 export default function AppointmentsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
@@ -370,6 +372,7 @@ export default function AppointmentsPage() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const token = localStorage.getItem('accessToken');
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -380,28 +383,60 @@ export default function AppointmentsPage() {
     `${API_BASE}/appointments/?type=scheduled&page_size=50`,
   ];
 
-  const fetchAppointments = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(tabEndpoints[tab], { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setAppointments(data.results || []);
-      } else if (res.status === 401) {
-        localStorage.clear();
-        navigate('/');
-      } else {
-        setError('Failed to load appointments.');
-      }
-    } catch {
-      setError('Network error. Please try again.');
-    }
-    setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, token]);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetch(tabEndpoints[tab], { headers: authHeaders });
+        if (res.ok) {
+          const data = await res.json();
+          if (!mounted) return;
+          setAppointments(data.results || []);
 
-  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+          // If the page was opened with an instruction to open a specific appointment,
+          // try to open it after loading the list (fallback to fetching the single appt).
+          if (location?.state?.openApptId) {
+            const targetId = location.state.openApptId;
+            const found = (data.results || []).find((a) => String(a.id) === String(targetId));
+            if (found) {
+              setSelected(found);
+              setDrawerOpen(true);
+              // Clear navigation state so re-rendering (e.g. tab changes) doesn't re-open the drawer
+              try { navigate(location.pathname, { replace: true, state: {} }); } catch (e) { /* ignore */ }
+            } else {
+              // fetch the appointment directly
+              try {
+                const single = await fetch(`${API_BASE}/appointments/${targetId}/`, { headers: authHeaders });
+                if (single.ok) {
+                  const ap = await single.json();
+                  if (!mounted) return;
+                  setSelected(ap);
+                  setDrawerOpen(true);
+                  try { navigate(location.pathname, { replace: true, state: {} }); } catch (e) { /* ignore */ }
+                }
+              } catch (err) {
+                // ignore - don't block the page
+              }
+            }
+          }
+        } else if (res.status === 401) {
+          localStorage.clear();
+          navigate('/');
+        } else {
+          if (!mounted) return;
+          setError('Failed to load appointments.');
+        }
+      } catch {
+        if (!mounted) return;
+        setError('Network error. Please try again.');
+      }
+      if (mounted) setLoading(false);
+    })();
+    return () => { mounted = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, token, location?.state?.openApptId, navigate, reloadKey]);
 
   const handleRowClick = (appt) => {
     setSelected(appt);
@@ -419,7 +454,7 @@ export default function AppointmentsPage() {
       });
       if (res.ok) {
         setCancelTarget(null);
-        fetchAppointments();
+        setReloadKey((r) => r + 1);
       } else {
         const err = await res.json();
         setCancelError(err.detail || 'Failed to cancel appointment.');
@@ -526,7 +561,7 @@ export default function AppointmentsPage() {
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Tooltip title="Refresh">
                   <IconButton
-                    onClick={fetchAppointments}
+                    onClick={() => setReloadKey((r) => r + 1)}
                     disabled={loading}
                     sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
                   >
