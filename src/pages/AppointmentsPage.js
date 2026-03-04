@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 // import { formatToCategoryTimezone } from '../utils/timezone.js';
 import { useNavigate } from 'react-router-dom';
 import { timeOnly, formatDateTime, formatDate, formatDateTimeLocal, formatDateLocal, formatServerDateTime } from '../utils/timezone.js';
@@ -247,11 +247,16 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
               value={appt.category_description}
             />
           )}
-          <DetailRow
-            icon={<PersonOutlineIcon sx={{ color: 'text.secondary' }} />}
-            label="User"
-            value={appt.username || `User #${appt.user}`}
-          />
+          {(() => {
+            const displayName = `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() || appt.username || `User #${appt.user}`;
+            return (
+              <DetailRow
+                icon={<PersonOutlineIcon sx={{ color: 'text.secondary' }} />}
+                label="User"
+                value={displayName}
+              />
+            );
+          })()}
 
           {appt.estimated_time && (
             <DetailRow
@@ -359,6 +364,7 @@ function DetailRow({ icon, label, value, highlight }) {
 export default function AppointmentsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { appointmentId } = useParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
@@ -395,15 +401,14 @@ export default function AppointmentsPage() {
           if (!mounted) return;
           setAppointments(data.results || []);
 
-          // If the page was opened with an instruction to open a specific appointment,
-          // try to open it after loading the list (fallback to fetching the single appt).
-          if (location?.state?.openApptId) {
-            const targetId = location.state.openApptId;
+          // If the page was opened with appointmentId in URL, fetch and open that appointment
+          const targetId = appointmentId || location?.state?.openApptId;
+          if (targetId) {
             const found = (data.results || []).find((a) => String(a.id) === String(targetId));
             if (found) {
               setSelected(found);
               setDrawerOpen(true);
-              // Clear navigation state so re-rendering (e.g. tab changes) doesn't re-open the drawer
+              // Clear navigation state so re-rendering doesn't re-open the drawer
               try { navigate(location.pathname, { replace: true, state: {} }); } catch (e) { /* ignore */ }
             } else {
               // fetch the appointment directly

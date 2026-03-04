@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTheme, useMediaQuery } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
+import { useLoginModal } from '../contexts/LoginModalContext.js';
 import {
   Box,
   Typography,
@@ -60,8 +62,12 @@ const orgTypeIcon = (type) => {
   return '🏪';
 };
 
+// Keep a single CategoryCard implementation (below) to avoid duplicate
+// declarations which previously caused a Babel parse error. The harmonized
+// card uses a flexible column layout, clamped text, and a fixed visual size
+// via parent grid/stretch so cards appear identical across pages.
+
 function OrgCard({ org, onClick }) {
-  const color = orgTypeColors[org.type] || orgTypeColors.default;
   return (
     <Card
       sx={{
@@ -70,68 +76,66 @@ function OrgCard({ org, onClick }) {
         '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' },
       }}
     >
-      <CardActionArea onClick={onClick} sx={{ height: '100%', p: 0.5 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+      <CardActionArea onClick={onClick} sx={{ height: '100%' }}>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Avatar
               sx={{
-                width: 48,
-                height: 48,
-                fontSize: 22,
-                background: `${color}22`,
-                border: `2px solid ${color}44`,
+                width: 44,
+                height: 44,
+                background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%)',
+                fontSize: 18,
               }}
             >
-              {orgTypeIcon(org.type)}
+              <BusinessOutlinedIcon sx={{ fontSize: 22 }} />
             </Avatar>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="subtitle1" fontWeight={700} noWrap>
+            <Box>
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {org.name}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
-                <LocationOnOutlinedIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary" noWrap>
-                  {[org.city, org.state, org.country].filter(Boolean).join(', ')}
+              {org.type && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {org.type}
                 </Typography>
-              </Box>
+              )}
             </Box>
           </Box>
-          <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {org.type && (
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+            {org.city && (
               <Chip
-                label={org.type}
+                icon={<LocationOnOutlinedIcon sx={{ fontSize: 12 }} />}
+                label={org.city}
                 size="small"
-                sx={{
-                  background: `${color}18`,
-                  color: color,
-                  fontWeight: 600,
-                  fontSize: 11,
-                  height: 22,
-                  borderRadius: 1,
-                }}
+                sx={{ fontSize: 11, height: 22, bgcolor: '#f5f5f5', color: '#616161' }}
               />
             )}
             <Chip
-              label={org.status}
+              label={org.status || 'active'}
               size="small"
-              color={org.status === 'active' ? 'success' : 'default'}
+              color={(org.status || 'active') === 'active' ? 'success' : 'default'}
               variant="outlined"
-              sx={{ fontSize: 11, height: 22, borderRadius: 1 }}
+              sx={{ fontSize: 11, height: 22 }}
             />
-            {org.portfolio_site && (
-              <Chip
-                component="a"
-                href={org.portfolio_site}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                label="🌐 Website"
-                size="small"
-                clickable
-                variant="outlined"
-                sx={{ fontSize: 11, height: 22, borderRadius: 1 }}
-              />
-            )}
           </Box>
         </CardContent>
       </CardActionArea>
@@ -150,7 +154,7 @@ function CategoryCard({ category, onClick }) {
       }}
     >
       <CardActionArea onClick={onClick} sx={{ height: '100%' }}>
-        <CardContent>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Avatar
               sx={{
@@ -165,11 +169,32 @@ function CategoryCard({ category, onClick }) {
               <CategoryOutlinedIcon sx={{ fontSize: 22 }} />
             </Avatar>
             <Box>
-              <Typography variant="subtitle1" fontWeight={700}>
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{
+                  // Clamp title to two lines to avoid overflow
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {category.name || category.description || `Category #${category.id}`}
               </Typography>
               {category.name && category.description && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
                   {category.description}
                 </Typography>
               )}
@@ -229,6 +254,7 @@ function CategoryCard({ category, onClick }) {
 export default function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { openLogin } = useLoginModal();
   const [step, setStep] = useState('search');
   const [query, setQuery] = useState('');
   const [orgs, setOrgs] = useState([]);
@@ -261,23 +287,43 @@ export default function HomePage() {
   // If navigated from /org/:id we may receive preSelectOrg and preSelectCat
   // in location.state. If present, pre-populate the org/category and open
   // the same booking flow that clicking the card on Home would open.
+  const handledRef = useRef(false);
+
   useEffect(() => {
     // Defer state updates to avoid calling setState synchronously inside the
     // effect body which can trigger the "set-state-in-effect" ESLint rule.
     const state = location?.state || {};
     const preOrg = state.preSelectOrg;
     const preCat = state.preSelectCat;
-    if (preOrg && preCat) {
+
+    if (preOrg && preCat && !handledRef.current) {
+      handledRef.current = true;
       (async () => {
-        // yield to the microtask queue so React batches these updates safely
         await Promise.resolve();
         try {
-          // Populate and move to categories step
           setSelectedOrg(preOrg);
           setStep('categories');
-          setCategories([preCat]);
 
-          // Open correct booking UI depending on scheduled flag
+          // Populate categories for the org if we don't already have them.
+          // If the component was navigated to via a modal login, the access
+          // token should be present in localStorage; use it when available.
+          if (!categories || categories.length === 0) {
+            try {
+              const t = localStorage.getItem('accessToken');
+              const hdrs = t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+              const catRes = await fetch(`${API_BASE}/categories/active/?organization=${preOrg.id}&page_size=50`, { headers: hdrs });
+              if (catRes.ok) {
+                const catData = await catRes.json();
+                setCategories(catData.results || []);
+              } else {
+                // fallback to showing the single pre-selected category
+                setCategories([preCat]);
+              }
+            } catch {
+              setCategories([preCat]);
+            }
+          }
+
           setSelectedCategory(preCat);
           if (preCat.is_scheduled) {
             setSelectedDate('');
@@ -299,7 +345,62 @@ export default function HomePage() {
         }
       })();
     }
-  // Run once on mount; we intentionally don't add many deps here.
+  // Run when location.state changes so modal-based logins can resume flow
+  }, [location.state]);
+
+  // Listen for post-login resume events (emitted when login modal succeeds)
+  useEffect(() => {
+    const handler = (e) => {
+      const detail = e?.detail || {};
+      const preOrg = detail.preSelectOrg;
+      const preCat = detail.preSelectCat;
+      if (preOrg && preCat) {
+        (async () => {
+          try {
+            setSelectedOrg(preOrg);
+            setStep('categories');
+
+            // Try to fetch the full category list for the org so the UI
+            // shows all services after login/resume instead of only the
+            // single clicked category.
+            try {
+              const t = localStorage.getItem('accessToken');
+              const hdrs = t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+              const catRes = await fetch(`${API_BASE}/categories/active/?organization=${preOrg.id}&page_size=50`, { headers: hdrs });
+              if (catRes.ok) {
+                const catData = await catRes.json();
+                setCategories(catData.results || [preCat]);
+              } else {
+                setCategories([preCat]);
+              }
+            } catch {
+              setCategories([preCat]);
+            }
+
+            setSelectedCategory(preCat);
+            if (preCat.is_scheduled) {
+              setSelectedDate('');
+              setSlots([]);
+              setSlotsError('');
+              setSelectedSlot(null);
+              setScheduledBookingStatus(null);
+              setScheduledBookingResult(null);
+              setScheduledBookingError('');
+              setScheduledOpen(true);
+            } else {
+              setBookingStatus(null);
+              setBookingResult(null);
+              setBookingError('');
+              setConfirmOpen(true);
+            }
+          } catch (err) {
+            // ignore any parsing/navigation issues
+          }
+        })();
+      }
+    };
+    window.addEventListener('sqip:postLogin', handler);
+    return () => window.removeEventListener('sqip:postLogin', handler);
   }, []);
 
   const handleSearch = useCallback(async (q = query) => {
@@ -351,6 +452,14 @@ export default function HomePage() {
   };
 
   const handleSelectCategory = (cat) => {
+    // Check if user is logged in before allowing booking
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      // Open login modal with return URL
+      openLogin({ from: location.pathname, preSelectOrg: selectedOrg, preSelectCat: cat });
+      return;
+    }
+    
     setSelectedCategory(cat);
     setBookingStatus(null);
     setBookingResult(null);
@@ -829,7 +938,7 @@ export default function HomePage() {
               {loadingCats && (
                 <Grid container spacing={2}>
                   {[...Array(4)].map((_, i) => (
-                    <Grid item xs={12} sm={6} key={i}>
+                    <Grid item xs={12} sm={6} key={i} sx={{ display: 'flex', alignItems: 'stretch' }}>
                       <Card>
                         <CardContent>
                           <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -851,7 +960,7 @@ export default function HomePage() {
               {!loadingCats && categories.length > 0 && (
                 <Grid container spacing={2}>
                   {categories.map((cat) => (
-                    <Grid item xs={12} sm={6} key={cat.id}>
+                    <Grid item xs={12} sm={6} key={cat.id} sx={{ display: 'flex', alignItems: 'stretch' }}>
                       <CategoryCard category={cat} onClick={() => handleSelectCategory(cat)} />
                     </Grid>
                   ))}
@@ -1073,17 +1182,15 @@ export default function HomePage() {
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1 }}>
+  <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', '& .MuiButton-root': { minWidth: 120, flex: '1 1 auto', whiteSpace: 'normal', textTransform: 'none' }, '@media (max-width:600px)': { '& .MuiButton-root': { flexBasis: '100%' } } }}>
           {scheduledBookingStatus === 'success' ? (
             <>
-              <Button onClick={handleCloseScheduled} variant="outlined" sx={{ borderRadius: 2 }}>
-                Book Another
-              </Button>
+              <Button onClick={handleCloseScheduled} variant="outlined" sx={{ borderRadius: 2, px: 2 }}>Book Another</Button>
               <Button
                 variant="contained"
                 startIcon={<EventAvailableOutlinedIcon />}
                 onClick={() => { handleCloseScheduled(); navigate('/appointments'); }}
-                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
+                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
               >
                 View Appointments
               </Button>
@@ -1091,7 +1198,7 @@ export default function HomePage() {
                 variant="contained"
                 startIcon={<EventAvailableOutlinedIcon />}
                 onClick={() => { handleCloseScheduled(); navigate('/appointments', { state: { openApptId: scheduledBookingResult?.id } }); }}
-                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
+                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
               >
                 View Appointment
               </Button>
@@ -1179,7 +1286,7 @@ export default function HomePage() {
             <Alert severity="error" sx={{ borderRadius: 2, mt: 1 }}>{bookingError}</Alert>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1 }}>
+  <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', '& .MuiButton-root': { minWidth: 120, flex: '1 1 auto', whiteSpace: 'normal', textTransform: 'none' }, '@media (max-width:600px)': { '& .MuiButton-root': { flexBasis: '100%' } } }}>
           {bookingStatus === null && (
             <>
               <Button onClick={handleCloseConfirm} variant="outlined" sx={{ borderRadius: 2 }}>Cancel</Button>
@@ -1200,12 +1307,12 @@ export default function HomePage() {
           )}
           {bookingStatus === 'success' && (
             <>
-              <Button onClick={handleCloseConfirm} variant="outlined" sx={{ borderRadius: 2 }}>Book Another</Button>
+              <Button onClick={handleCloseConfirm} variant="outlined" sx={{ borderRadius: 2, px: 2 }}>Book Another</Button>
               <Button
                 variant="contained"
                 startIcon={<EventAvailableOutlinedIcon />}
                 onClick={() => { handleCloseConfirm(); navigate('/appointments'); }}
-                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
+                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
               >
                 View Appointments
               </Button>
@@ -1213,7 +1320,7 @@ export default function HomePage() {
                 variant="contained"
                 startIcon={<EventAvailableOutlinedIcon />}
                 onClick={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
-                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
+                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
               >
                 View Appointment
               </Button>

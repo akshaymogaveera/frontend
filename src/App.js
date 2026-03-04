@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import LoginPage from './pages/LoginPage.js';
+import { LoginModalProvider } from './contexts/LoginModalContext.js';
 import HomePage from './pages/HomePage.js';
 import AppointmentsPage from './pages/AppointmentsPage.js';
 import AdminPage from './pages/AdminPage.js';
@@ -77,13 +78,13 @@ const theme = createTheme({
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('accessToken');
-  return token ? children : <Navigate to="/" replace />;
+  return token ? children : <Navigate to="/login" replace />;
 }
 
 function AdminRoute({ children }) {
   const isStaff = localStorage.getItem('isStaff') === 'true';
   const groups = JSON.parse(localStorage.getItem('userGroups') || '[]');
-  return isStaff || groups.length > 0 ? children : <Navigate to="/home" replace />;
+  return isStaff || groups.length > 0 ? children : <Navigate to="/" replace />;
 }
 
 function App() {
@@ -91,16 +92,20 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <Routes>
-          <Route path="/" element={<LoginPage />} />
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            }
-          />
+        <LoginModalProvider>
+          <Routes>
+          {/* Public home page - no auth required */}
+          <Route path="/" element={<HomePage />} />
+          
+          {/* Login page */}
+          <Route path="/login" element={<LoginPage />} />
+          
+          {/* Public org/category/appointment pages for browsing */}
+          <Route path="/org/:orgId" element={<OrgBookingPage />} />
+          <Route path="/org/:orgId/category/:categoryId" element={<OrgBookingPage />} />
+          <Route path="/appointment/:appointmentId" element={<AppointmentsPage />} />
+          
+          {/* Protected routes - require authentication */}
           <Route
             path="/appointments"
             element={
@@ -119,9 +124,11 @@ function App() {
               </ProtectedRoute>
             }
           />
+          
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
-          <Route path="/org/:orgId" element={<OrgBookingPage />} />
-        </Routes>
+          </Routes>
+        </LoginModalProvider>
       </Router>
     </ThemeProvider>
   );

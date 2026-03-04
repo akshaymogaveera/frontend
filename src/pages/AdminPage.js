@@ -25,6 +25,8 @@ import {
   Select,
   InputLabel,
   FormControl,
+  Grid,
+  FormHelperText,
   Skeleton,
   Avatar,
   Badge,
@@ -51,6 +53,15 @@ import Navbar from '../components/Navbar.js';
 
 const API_BASE = '/api';
 
+// Small curated country list for admin phone entry (flag emoji + dial code)
+const COUNTRIES = [
+  { code: 'US', label: 'United States', dial: '+1', flag: '🇺🇸' },
+  { code: 'IN', label: 'India', dial: '+91', flag: '🇮🇳' },
+  { code: 'GB', label: 'United Kingdom', dial: '+44', flag: '🇬🇧' },
+  { code: 'AU', label: 'Australia', dial: '+61', flag: '🇦🇺' },
+  { code: 'CA', label: 'Canada', dial: '+1', flag: '🇨🇦' },
+];
+
 const statusConfig = {
   active:   { label: 'Active',      bg: '#e8f5e9', text: '#2e7d32', borderColor: '#4caf50' },
   inactive: { label: 'Inactive',    bg: '#f5f5f5', text: '#616161', borderColor: '#bdbdbd' },
@@ -65,6 +76,8 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
   const canCheckout = appt.status === 'checkin';   // already checked-in → mark served
   const canCancel = appt.status !== 'cancel';
   const canMove = appt.status !== 'cancel' && appt.status !== 'checkin';
+  // Prefer explicit first/last name supplied by the API. Fall back to username.
+  const displayName = `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() || appt.username || `User #${appt.user}`;
 
   return (
     <Paper
@@ -100,7 +113,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <Typography variant="body2" fontWeight={700} noWrap>
-              #{appt.id} — {appt.username || 'Unknown User'}
+              #{appt.id} — {displayName}
             </Typography>
             <Chip
               label={cfg.label}
@@ -119,7 +132,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <PersonOutlineIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
               <Typography variant="caption" color="text.secondary">
-                {appt.username || `User #${appt.user}`}
+                {displayName}
               </Typography>
             </Box>
             {appt.user_email && (
@@ -279,7 +292,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
   );
 }
 
-function AppointmentList({ category, apptType }) {
+function AppointmentList({ category, apptType, refreshKey = null }) {
   // apptType: 'unscheduled' | 'scheduled'
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -317,6 +330,14 @@ function AppointmentList({ category, apptType }) {
       await fetchAppointments();
     })();
   }, [fetchAppointments]);
+
+  // Re-fetch when refreshKey changes (if provided)
+  useEffect(() => {
+    if (refreshKey == null) return;
+    (async () => {
+      await fetchAppointments();
+    })();
+  }, [refreshKey]);
 
   const showToast = (msg, severity = 'success') => setToast({ open: true, msg, severity });
 
@@ -472,7 +493,7 @@ function AppointmentList({ category, apptType }) {
   );
 }
 
-function CategoryPanel({ category }) {
+function CategoryPanel({ category, refreshKey = null }) {
   const [apptTab, setApptTab] = useState(0); // 0 = Unscheduled, 1 = Scheduled
 
   // If category explicitly indicates whether it's scheduled or not, render
@@ -482,9 +503,9 @@ function CategoryPanel({ category }) {
     return (
       <Box>
         {category.is_scheduled ? (
-          <AppointmentList key={`${category.id}-scheduled`} category={category} apptType="scheduled" />
+            <AppointmentList key={`${category.id}-scheduled`} category={category} apptType="scheduled" refreshKey={refreshKey} />
         ) : (
-          <AppointmentList key={`${category.id}-unscheduled`} category={category} apptType="unscheduled" />
+            <AppointmentList key={`${category.id}-unscheduled`} category={category} apptType="unscheduled" refreshKey={refreshKey} />
         )}
       </Box>
     );
@@ -520,10 +541,10 @@ function CategoryPanel({ category }) {
       </Tabs>
 
       {apptTab === 0 && (
-        <AppointmentList key={`${category.id}-unscheduled`} category={category} apptType="unscheduled" />
+          <AppointmentList key={`${category.id}-unscheduled`} category={category} apptType="unscheduled" refreshKey={refreshKey} />
       )}
       {apptTab === 1 && (
-        <AppointmentList key={`${category.id}-scheduled`} category={category} apptType="scheduled" />
+          <AppointmentList key={`${category.id}-scheduled`} category={category} apptType="scheduled" refreshKey={refreshKey} />
       )}
     </Box>
   );
@@ -540,6 +561,20 @@ export default function AdminPage() {
   const [organizations, setOrganizations] = useState([]);
   const [orgIndex, setOrgIndex] = useState(0);
   const [categoryTabIndexMap, setCategoryTabIndexMap] = useState({});
+  // Queue modal / form state
+  const [queueModalOpen, setQueueModalOpen] = useState(false);
+  const [queueModalCategory, setQueueModalCategory] = useState(null);
+  const [queueForm, setQueueForm] = useState({ first_name: '', last_name: '', phone: '', email: '' });
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueError, setQueueError] = useState('');
+  // selected country for phone entry & per-field errors (default to India)
+  const defaultCountry = COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0];
+  const [selectedCountry, setSelectedCountry] = useState(defaultCountry);
+  const [queueFormErrors, setQueueFormErrors] = useState({});
+
+  // (Intentionally no effect that sets state synchronously.)
+  // refreshKey increments to trigger appointment list refetch
+  const [queueRefreshKey, setQueueRefreshKey] = useState(0);
 
   const token = localStorage.getItem('accessToken');
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -604,6 +639,109 @@ export default function AdminPage() {
       setToast({ open: true, msg: 'Network error', severity: 'error' });
     }
     setStatusUpdating((prev) => ({ ...prev, [category.id]: false }));
+  };
+
+  // Queue modal handlers
+  const closeQueueModal = () => {
+    setQueueModalOpen(false);
+    setQueueError('');
+  };
+
+  const submitQueueForm = async () => {
+    if (!queueModalCategory) return;
+    setQueueLoading(true);
+    setQueueError('');
+    setQueueFormErrors({});
+
+    // Basic front-end validation
+    const errors = {};
+    if (!queueForm.first_name || queueForm.first_name.trim().length === 0) {
+      errors.first_name = 'First name is required';
+    }
+    if (!queueForm.phone || queueForm.phone.trim().length === 0) {
+      errors.phone = 'Phone is required';
+    } else {
+      // strip non-digits for length check but preserve leading + for full value later
+      const digits = queueForm.phone.replace(/\D/g, '');
+      if (digits.length < 6) errors.phone = 'Enter a valid phone number';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setQueueFormErrors(errors);
+      setQueueLoading(false);
+      return;
+    }
+
+    // Normalize phone: ensure it starts with +countrycode
+    let phoneRaw = queueForm.phone.trim();
+    // If user supplied a leading +, keep it, otherwise prepend selected country's dial code
+    let phoneDigits = phoneRaw.replace(/[^\d+]/g, '');
+    if (!phoneDigits.startsWith('+')) {
+      const dial = selectedCountry && selectedCountry.dial ? selectedCountry.dial : COUNTRIES[0].dial;
+      // remove leading zeros or plus signs from phoneDigits
+      const justDigits = phoneDigits.replace(/\D/g, '');
+      phoneDigits = `${dial}${justDigits.startsWith('0') ? justDigits.replace(/^0+/, '') : justDigits}`;
+      if (!phoneDigits.startsWith('+')) phoneDigits = `+${phoneDigits.replace(/^\+?/, '')}`;
+    }
+
+    try {
+      const payload = {
+        organization: queueModalCategory.organization || queueModalCategory.organization_id || queueModalCategory.org_id || queueModalCategory.organization,
+        category: queueModalCategory.id,
+        first_name: queueForm.first_name.trim(),
+        last_name: queueForm.last_name ? queueForm.last_name.trim() : '',
+        phone: phoneDigits,
+        email: queueForm.email ? queueForm.email.trim() : '',
+      };
+      const res = await fetch(`${API_BASE}/appointments/add_user_to_queue/`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        // success
+        setToast({ open: true, msg: 'User added to queue', severity: 'success' });
+        // bump refresh key to force lists to reload
+        setQueueRefreshKey((k) => k + 1);
+        closeQueueModal();
+      } else {
+        let msg = 'Failed to add user to queue';
+        try {
+          const err = await res.json();
+          if (!err) {
+            msg = 'Failed to add user to queue';
+          } else if (typeof err === 'string') {
+            msg = err;
+          } else if (err.detail) {
+            msg = err.detail;
+          } else if (err.errors) {
+            if (typeof err.errors === 'string') {
+              msg = err.errors;
+            } else if (typeof err.errors === 'object') {
+              // Extract human-readable messages from each field
+              msg = Object.values(err.errors)
+                .flat()
+                .join(' ');
+            } else {
+              msg = String(err.errors);
+            }
+          } else if (err.message) {
+            msg = err.message;
+          } else if (err.non_field_errors) {
+            msg = [].concat(err.non_field_errors).join(' ');
+          } else {
+            // Fallback: stringify whatever structure we received
+            msg = JSON.stringify(err);
+          }
+        } catch (e) {
+          msg = 'Failed to add user to queue';
+        }
+        setQueueError(msg);
+      }
+    } catch (e) {
+      setQueueError('Network error');
+    }
+    setQueueLoading(false);
   };
 
   // Build organizations grouped with their categories for hierarchical tabs
@@ -846,6 +984,40 @@ export default function AdminPage() {
                             }
                           />
                         )}
+
+                        {/* Add to queue button for UNSCHEDULED categories */}
+                        {!currentCategory.is_scheduled && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<DirectionsWalkIcon />}
+                            onClick={() => {
+                              setQueueModalCategory(currentCategory);
+                              setQueueForm({ first_name: '', last_name: '', phone: '', email: '' });
+                              setQueueError('');
+                              setQueueFormErrors({});
+                              // Auto-select country from browser locale when opening modal
+                              try {
+                                const lang = (navigator.language || navigator.userLanguage || '').toUpperCase();
+                                const parts = lang.split('-');
+                                // Default to India if we can't match the browser locale
+                                let countryToSet = COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0];
+                                if (parts.length === 2) {
+                                  const countryCode = parts[1];
+                                  const match = COUNTRIES.find((c) => c.code === countryCode);
+                                  if (match) countryToSet = match;
+                                }
+                                setSelectedCountry(countryToSet);
+                              } catch (e) {
+                                setSelectedCountry(COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0]);
+                              }
+                              setQueueModalOpen(true);
+                            }}
+                            sx={{ ml: 1 }}
+                          >
+                            Add to queue
+                          </Button>
+                        )}
                       </Box>
                     </Box>
 
@@ -896,7 +1068,7 @@ export default function AdminPage() {
                     <Divider sx={{ mb: 2 }} />
 
                     {/* Appointments list for this category */}
-                    <CategoryPanel category={currentCategory} />
+                    <CategoryPanel category={currentCategory} refreshKey={queueRefreshKey} />
                   </Box>
                 )}
               </Paper>
@@ -920,6 +1092,99 @@ export default function AdminPage() {
           {toast.msg}
         </Alert>
       </Snackbar>
+
+      {/* Add User to Queue Modal */}
+      <Dialog open={queueModalOpen} onClose={closeQueueModal} fullWidth maxWidth="sm">
+        <DialogTitle>Add user to queue — {queueModalCategory ? (queueModalCategory.name || `Category #${queueModalCategory.id}`) : ''}</DialogTitle>
+        <DialogContent>
+          {queueError && <Alert severity="error" sx={{ mb: 2 }}>{queueError}</Alert>}
+          <Box component="form" sx={{ mt: 1 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  required
+                  label="First name"
+                  value={queueForm.first_name}
+                  onChange={(e) => setQueueForm((f) => ({ ...f, first_name: e.target.value }))}
+                  fullWidth
+                  error={!!queueFormErrors.first_name}
+                  helperText={queueFormErrors.first_name}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Last name"
+                  value={queueForm.last_name}
+                  onChange={(e) => setQueueForm((f) => ({ ...f, last_name: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+
+              <Grid item xs={4} sm={3}>
+                <FormControl fullWidth>
+                  <InputLabel id="country-select-label">Country</InputLabel>
+                  <Select
+                    labelId="country-select-label"
+                    value={selectedCountry.code}
+                    label="Country"
+                    onChange={(e) => {
+                      const c = COUNTRIES.find((cc) => cc.code === e.target.value) || COUNTRIES[0];
+                      setSelectedCountry(c);
+                    }}
+                    renderValue={(val) => {
+                      const c = COUNTRIES.find((cc) => cc.code === val);
+                      return c ? `${c.flag} ${c.dial}` : val;
+                    }}
+                  >
+                    {COUNTRIES.map((c) => (
+                      <MenuItem key={c.code} value={c.code}>{c.flag} {c.label} ({c.dial})</MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>Country code</FormHelperText>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={8} sm={9}>
+                <TextField
+                  required
+                  label="Phone"
+                  value={queueForm.phone}
+                  onChange={(e) => setQueueForm((f) => ({ ...f, phone: e.target.value }))}
+                  fullWidth
+                  error={!!queueFormErrors.phone}
+                  helperText={queueFormErrors.phone || 'Enter local phone number (will be saved with selected country code)'}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  label="Email (optional)"
+                  value={queueForm.email}
+                  onChange={(e) => setQueueForm((f) => ({ ...f, email: e.target.value }))}
+                  fullWidth
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeQueueModal} disabled={queueLoading}>Cancel</Button>
+          <Button
+            onClick={submitQueueForm}
+            variant="contained"
+            disabled={queueLoading}
+            sx={{
+              borderRadius: 3,
+              background: 'linear-gradient(90deg,#833ab4,#fd1d1d)',
+              color: '#fff',
+              px: 3,
+              '&:hover': { background: 'linear-gradient(90deg,#6f2a9f,#e21b2b)' },
+            }}
+          >
+            {queueLoading ? <CircularProgress size={18} color="inherit" /> : 'Add to queue'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
