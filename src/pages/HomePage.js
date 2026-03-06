@@ -9,6 +9,7 @@ import {
   TextField,
   InputAdornment,
   IconButton,
+  Paper,
   Card,
   CardContent,
   CardActionArea,
@@ -260,6 +261,18 @@ export default function HomePage() {
   const [orgs, setOrgs] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextPageUrl, setNextPageUrl] = useState(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('recentSearches') || '[]');
+    } catch (e) { return []; }
+  });
+  const searchDebounceRef = useRef(null);
+  const searchAbortRef = useRef(null);
+  const skipDebounceRef = useRef(false);
   const [selectedOrg, setSelectedOrg] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loadingCats, setLoadingCats] = useState(false);
@@ -403,32 +416,72 @@ export default function HomePage() {
     return () => window.removeEventListener('sqip:postLogin', handler);
   }, []);
 
-  const handleSearch = useCallback(async (q = query) => {
-    if (!q.trim()) return;
+  const handleSearch = useCallback(async (q, p = 1) => {
+    // q: query string, p: page number (1-indexed)
+    if (!q || !q.trim()) return;
     setSearching(true);
     setSearchError('');
-    setOrgs([]);
     try {
-      const res = await fetch(`${API_BASE}/organizations/active/?search=${encodeURIComponent(q)}&page_size=20`, {
+      // cancel previous inflight search
+      try { if (searchAbortRef.current) searchAbortRef.current.abort(); } catch (e) {}
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+
+      const res = await fetch(`${API_BASE}/organizations/active/?search=${encodeURIComponent(q)}&page_size=20&page=${p}`, {
         headers: authHeaders,
+        signal: controller.signal,
       });
       if (res.ok) {
         const data = await res.json();
-        setOrgs(data.results || []);
-        if ((data.results || []).length === 0) setSearchError('No organizations found. Try a different search.');
+        const results = data.results || [];
+        if (p === 1) setOrgs(results);
+        else setOrgs((prev) => [...prev, ...results]);
+        // server may return next as URL or null
+        setNextPageUrl(data.next || null);
+        setHasMore(Boolean(data.next));
+        setPage(p);
+        if ((data.results || []).length === 0 && p === 1) setSearchError('No organizations found. Try a different search.');
+        // update recent searches only after successful results for page 1
+            // Only record a recent search when it was triggered explicitly (Search button, Enter, or recent click)
+            if (p === 1 && results.length > 0 && skipDebounceRef.current) {
+              try {
+                const trimmed = q.trim();
+                setRecentSearches((prev) => {
+                  const cur = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, 4);
+                  try { localStorage.setItem('recentSearches', JSON.stringify(cur)); } catch (e) {}
+                  return cur;
+                });
+              } catch (e) {}
+            }
+            // reset manual-trigger flag so subsequent debounced searches don't record
+            skipDebounceRef.current = false;
       } else if (res.status === 401) {
         localStorage.clear();
         navigate('/');
       } else {
         setSearchError('Failed to fetch organizations.');
       }
-    } catch {
-      setSearchError('Network error. Please try again.');
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        // aborted by a newer request - ignore
+      } else {
+        setSearchError('Network error. Please try again.');
+      }
     }
     setSearching(false);
-  }, [query, token, navigate]);
+  }, [token, navigate]);
 
   const handleSelectOrg = async (org) => {
+    // Save recent search term for convenience
+    try {
+      if (query && query.trim()) {
+        const cur = [query.trim(), ...recentSearches.filter((s) => s !== query.trim())].slice(0, 6);
+        setRecentSearches(cur);
+        localStorage.setItem('recentSearches', JSON.stringify(cur));
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
     setSelectedOrg(org);
     setStep('categories');
     setCategories([]);
@@ -521,6 +574,35 @@ export default function HomePage() {
       setBookingStatus('error');
     }
   };
+
+  // Debounced live search when user types
+  useEffect(() => {
+    // clear pending timer
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!query || !query.trim()) {
+      // if query cleared, reset results — defer to avoid set-state-in-effect lint
+      Promise.resolve().then(() => {
+        setOrgs([]);
+        setSearchError('');
+        setHasMore(false);
+        setNextPageUrl(null);
+        setPage(1);
+        // abort any inflight search when query cleared
+        try { if (searchAbortRef.current) searchAbortRef.current.abort(); } catch (e) {}
+      });
+      return undefined;
+    }
+    // If we just triggered an immediate manual search (e.g. recent click), skip scheduling
+    if (skipDebounceRef.current) {
+      skipDebounceRef.current = false;
+      return undefined;
+    }
+    // Debounce a small delay to avoid spamming backend
+    searchDebounceRef.current = setTimeout(() => {
+      handleSearch(query, 1);
+    }, 300);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [query, handleSearch]);
 
   const handleCloseConfirm = () => {
     setConfirmOpen(false);
@@ -811,7 +893,14 @@ export default function HomePage() {
                   placeholder="Search by name, city, type…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      skipDebounceRef.current = true;
+                      handleSearch(query, 1);
+                    }
+                  }}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                   variant="outlined"
                   InputProps={{
                     startAdornment: (
@@ -831,7 +920,7 @@ export default function HomePage() {
                 />
                 <Button
                   variant="contained"
-                  onClick={() => handleSearch()}
+                  onClick={() => { skipDebounceRef.current = true; handleSearch(query, 1); }}
                   disabled={searching || !query.trim()}
                   sx={{
                     minWidth: 110,
@@ -849,6 +938,48 @@ export default function HomePage() {
                 <Alert severity="info" sx={{ mb: 3, borderRadius: 2, maxWidth: 620, mx: 'auto' }}>
                   {searchError}
                 </Alert>
+              )}
+
+              {/* Recent searches dropdown when input focused and query empty */}
+              {searchFocused && (!query || query.trim() === '') && recentSearches.length > 0 && (
+                <Box sx={{ maxWidth: 620, mx: 'auto', mb: 2 }}>
+                  <Paper sx={{ p: 1, borderRadius: 2 }} elevation={2}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Typography variant="subtitle2" sx={{ px: 1, pb: 1 }}>Recent searches</Typography>
+                      <Button size="small" onClick={() => {
+                        setRecentSearches([]);
+                        try { localStorage.removeItem('recentSearches'); } catch (e) {}
+                      }}>Clear all</Button>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      {recentSearches.map((r) => (
+                        <Box key={r} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Button
+                            variant="text"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              // Trigger immediate search and prevent the debounced effect from firing again
+                              skipDebounceRef.current = true;
+                              setQuery(r);
+                              handleSearch(r, 1);
+                              setSearchFocused(false);
+                            }}
+                            sx={{ justifyContent: 'flex-start', textTransform: 'none', flex: 1 }}
+                          >
+                            {r}
+                          </Button>
+                          <IconButton size="small" onClick={() => {
+                            const cur = recentSearches.filter((s) => s !== r);
+                            setRecentSearches(cur);
+                            try { localStorage.setItem('recentSearches', JSON.stringify(cur)); } catch (e) {}
+                          }}>
+                            <ClearIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Paper>
+                </Box>
               )}
 
               {searching && (
@@ -888,6 +1019,13 @@ export default function HomePage() {
                         </Box>
                       </Fade>
                     ))}
+                    {hasMore && (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                        <Button variant="outlined" onClick={() => handleSearch(query, page + 1)} disabled={searching}>
+                          {searching ? <CircularProgress size={18} /> : 'Load more'}
+                        </Button>
+                      </Box>
+                    )}
                   </Box>
                 </>
               )}
