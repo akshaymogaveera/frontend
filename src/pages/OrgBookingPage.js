@@ -30,6 +30,7 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
+import BookingConfirmDialog from '../components/BookingConfirmDialog.js';
 
 const API_BASE = '/api';
 
@@ -92,7 +93,7 @@ function CategoryCard({ cat, onSelect }) {
   );
 }
 
-function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
+function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -109,7 +110,9 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
         body: JSON.stringify({ organization: orgId, category: category.id, user: Number(userId) }),
       });
       if (res.ok) {
-        onSuccess();
+        // return created appointment object to caller so the page can show a modal
+        const data = await res.json();
+        onSuccess(data);
       } else {
         const data = await res.json();
         let errorMsg = 'Booking failed. Please try again.';
@@ -123,10 +126,16 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
             else errorMsg = JSON.stringify(data.errors);
           }
         }
-        setError(errorMsg);
+        // let parent show the shared BookingConfirmDialog in error mode (so it can show View Appointments)
+        if (typeof onError === 'function') {
+          onError(errorMsg);
+        } else {
+          setError(errorMsg);
+        }
       }
     } catch {
-      setError('Network error. Please try again.');
+      if (typeof onError === 'function') onError('Network error. Please try again.');
+      else setError('Network error. Please try again.');
     }
     setLoading(false);
   };
@@ -144,7 +153,11 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess }) {
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
         <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>Cancel</Button>
-        <Button onClick={handleBook} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />} sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}>{loading ? 'Booking…' : 'Confirm'}</Button>
+        {/* If server reports a duplicate appointment error, hide the Confirm button to
+            prevent repeated submissions. Use a case-insensitive match for 'already exist'. */}
+        {!(error && /already exist/i.test(error)) && (
+          <Button onClick={handleBook} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />} sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}>{loading ? 'Booking…' : 'Confirm'}</Button>
+        )}
       </DialogActions>
     </Dialog>
   );
@@ -161,7 +174,13 @@ export default function OrgBookingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCat, setSelectedCat] = useState(null);
-  const [bookSuccess, setBookSuccess] = useState(false);
+  // removed redirecting success banner; we'll open the booking-confirm dialog instead
+  const [createdAppt, setCreatedAppt] = useState(null);
+  const [createdApptOpen, setCreatedApptOpen] = useState(false);
+  const [createdApptError, setCreatedApptError] = useState(null);
+  const [createdApptErrorOpen, setCreatedApptErrorOpen] = useState(false);
+  
+  // (removed unused cancel handler)
 
   const isLoggedIn = Boolean(localStorage.getItem('accessToken'));
   const { openLogin } = useLoginModal();
@@ -178,8 +197,16 @@ export default function OrgBookingPage() {
           const cat = data.categories.find((c) => String(c.id) === String(categoryId));
           if (cat) {
             setCategories([cat]);
+            // Only auto-open when explicitly requested via ?open=1 or ?open=true.
+            // If the user is not logged in and the URL requested open, trigger the
+            // login modal with preselect so the dialog can open after successful login.
+            const qs = new URLSearchParams(window.location.search);
+            const explicitlyOpen = qs.get('open') === '1' || qs.get('open') === 'true';
             const token = localStorage.getItem('accessToken');
-            if (token) setSelectedCat(cat);
+            if (explicitlyOpen) {
+              if (token) setSelectedCat(cat);
+              else openLogin({ from: window.location.pathname + window.location.search, preSelectOrg: data.organization, preSelectCat: cat });
+            }
           } else {
             setCategories(data.categories || []);
           }
@@ -195,7 +222,7 @@ export default function OrgBookingPage() {
       setError('Network error. Please try again.');
     }
     setLoading(false);
-  }, [orgId, categoryId]);
+  }, [orgId, categoryId, openLogin]);
 
   useEffect(() => { (async () => { await fetchLanding(); })(); }, [fetchLanding]);
 
@@ -229,10 +256,19 @@ export default function OrgBookingPage() {
     }
   };
 
-  const handleBookSuccess = () => {
+  const handleBookSuccess = (appt) => {
+    // appt is the created appointment object returned by the API
     setSelectedCat(null);
-    setBookSuccess(true);
-    setTimeout(() => navigate('/appointments'), 2500);
+    setCreatedAppt(appt || null);
+    setCreatedApptOpen(true);
+  };
+
+  const handleBookError = (errorMsg) => {
+    // close the selection and show the shared booking dialog in error mode
+    setSelectedCat(null);
+    setCreatedAppt(null);
+    setCreatedApptError(errorMsg || 'Booking failed.');
+    setCreatedApptErrorOpen(true);
   };
 
   if (loading) return (<Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>);
@@ -260,7 +296,7 @@ export default function OrgBookingPage() {
       </Box>
 
       <Box sx={{ flex: 1, maxWidth: isMobile ? '100%' : 720, mx: 'auto', width: '100%', px: isMobile ? 1.5 : 3, py: 3 }}>
-        {bookSuccess && (<Fade in><Alert severity="success" sx={{ mb: 3, borderRadius: 2, fontWeight: 600 }} icon={<CheckCircleOutlineIcon />}>🎉 You've joined the queue! Redirecting to your appointments…</Alert></Fade>)}
+  {/* Removed redirecting banner — booking confirmation dialog will open instead */}
         <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>{categories.length === 0 ? 'No services available' : 'Available Services'}</Typography>
         {categories.length === 0 && (<Typography variant="body2" color="text.secondary">This organisation has no active services at the moment.</Typography>)}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -276,7 +312,28 @@ export default function OrgBookingPage() {
         <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center' }}>Powered by sqip · Queue Management Made Simple</Typography>
       </Box>
 
-      {selectedCat && !selectedCat.is_scheduled && (<WalkInDialog open={Boolean(selectedCat)} onClose={() => setSelectedCat(null)} category={selectedCat} orgId={Number(orgId)} onSuccess={handleBookSuccess} />)}
+      {selectedCat && !selectedCat.is_scheduled && (
+        <WalkInDialog
+          open={Boolean(selectedCat)}
+          onClose={() => setSelectedCat(null)}
+          category={selectedCat}
+          orgId={Number(orgId)}
+          onSuccess={handleBookSuccess}
+          onError={handleBookError}
+        />
+      )}
+
+      <BookingConfirmDialog
+        open={createdApptOpen || createdApptErrorOpen}
+        onClose={() => { setCreatedApptOpen(false); setCreatedApptErrorOpen(false); setCreatedAppt(null); setCreatedApptError(null); }}
+        status={createdApptOpen ? 'success' : (createdApptErrorOpen ? 'error' : null)}
+        result={createdAppt}
+        error={createdApptError}
+        onConfirm={null}
+        onBookAnother={() => { setCreatedApptOpen(false); setCreatedAppt(null); setCreatedApptError(null); setCreatedApptErrorOpen(false); }}
+        onViewAppointments={() => { setCreatedApptOpen(false); setCreatedApptErrorOpen(false); navigate('/appointments'); }}
+        onViewAppointment={() => { setCreatedApptOpen(false); setCreatedApptErrorOpen(false); navigate('/appointments', { state: { openApptId: createdAppt?.id } }); }}
+      />
     </Box>
   );
 }

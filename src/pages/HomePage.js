@@ -44,6 +44,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import Navbar from '../components/Navbar.js';
+import BookingConfirmDialog from '../components/BookingConfirmDialog.js';
 
 const API_BASE = '/api';
 
@@ -1347,129 +1348,52 @@ export default function HomePage() {
             </>
           ) : scheduledBookingStatus !== 'loading' ? (
             <>
-              <Button onClick={handleCloseScheduled} variant="outlined" sx={{ borderRadius: 2 }}>
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                disabled={!selectedSlot}
-                onClick={handleScheduledBooking}
-                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
-              >
-                Confirm Booking
-              </Button>
+              {scheduledBookingError && /already exist/i.test(scheduledBookingError) ? (
+                <Button
+                  onClick={handleCloseScheduled}
+                  variant="outlined"
+                  sx={{ borderRadius: 30, px: 4, color: '#6a1b9a', borderColor: 'rgba(106,27,154,0.25)', '&:hover': { borderColor: 'rgba(106,27,154,0.4)' } }}
+                >
+                  Close
+                </Button>
+              ) : (
+                <Button onClick={handleCloseScheduled} variant="outlined" sx={{ borderRadius: 2 }}>Cancel</Button>
+              )}
+              {scheduledBookingError && /already exist/i.test(scheduledBookingError) ? (
+                <Button
+                  variant="contained"
+                  startIcon={<EventAvailableOutlinedIcon />}
+                  onClick={() => { handleCloseScheduled(); navigate('/appointments'); }}
+                  sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}
+                >
+                  View Appointments
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  disabled={!selectedSlot}
+                  onClick={handleScheduledBooking}
+                  sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
+                >
+                  Confirm Booking
+                </Button>
+              )}
             </>
           ) : null}
         </DialogActions>
       </Dialog>
 
-      {/* Confirm Dialog (walk-in) */}
-      <Dialog
+      <BookingConfirmDialog
         open={confirmOpen}
-        onClose={bookingStatus !== 'loading' ? handleCloseConfirm : undefined}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
-      >
-        <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
-        <DialogTitle sx={{ fontWeight: 700, pb: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {bookingStatus === 'success' ? 'Booking Confirmed! 🎉' : 'Confirm Appointment'}
-          <IconButton size="small" onClick={() => bookingStatus !== 'loading' && handleCloseConfirm()} sx={{ color: 'text.secondary' }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 1.5 }}>
-          {bookingStatus === null && selectedOrg && selectedCategory && (
-            <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                You're about to join the queue for:
-              </Typography>
-              <Box sx={{ bgcolor: 'rgba(131,58,180,0.05)', border: '1px solid rgba(131,58,180,0.15)', borderRadius: 2, p: 2, mb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <BusinessOutlinedIcon color="primary" sx={{ fontSize: 18 }} />
-                  <Typography fontWeight={700}>{selectedOrg.name}</Typography>
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <CategoryOutlinedIcon color="secondary" sx={{ fontSize: 18 }} />
-                  <Typography variant="body2">
-                    {selectedCategory.name || selectedCategory.description || `Category #${selectedCategory.id}`}
-                  </Typography>
-                </Box>
-              </Box>
-              <Typography variant="caption" color="text.disabled">
-                This is an unscheduled (walk-in) appointment.
-              </Typography>
-            </Box>
-          )}
-          {bookingStatus === 'loading' && (
-            <Box sx={{ textAlign: 'center', py: 3 }}>
-              <CircularProgress sx={{ mb: 1 }} />
-              <Typography color="text.secondary">Booking your spot…</Typography>
-            </Box>
-          )}
-          {bookingStatus === 'success' && bookingResult && (
-            <Box sx={{ textAlign: 'center', py: 1 }}>
-              <CheckCircleOutlineIcon sx={{ fontSize: 56, color: 'success.main', mb: 1 }} />
-              <Typography variant="h6" fontWeight={700} gutterBottom>
-                You're #{bookingResult.counter} in line
-              </Typography>
-              <Box sx={{ border: '1px solid', borderColor: 'success.light', borderRadius: 2, p: 2, mt: 1, textAlign: 'left' }}>
-                <Typography variant="body2" color="text.secondary"><strong>Queue position:</strong> #{bookingResult.counter}</Typography>
-                <Typography variant="body2" color="text.secondary"><strong>Status:</strong> {bookingResult.status ?? '-'}</Typography>
-                <Typography variant="body2" color="text.secondary"><strong>Appointment ID:</strong> {bookingResult.id ? `#${bookingResult.id}` : '-'}</Typography>
-                {bookingResult.estimated_time && (
-                  <Typography variant="body2" color="text.secondary"><strong>Estimated wait:</strong> {bookingResult.estimated_time}</Typography>
-                )}
-              </Box>
-            </Box>
-          )}
-          {bookingStatus === 'error' && (
-            <Alert severity="error" sx={{ borderRadius: 2, mt: 1 }}>{bookingError}</Alert>
-          )}
-        </DialogContent>
-  <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', '& .MuiButton-root': { minWidth: 120, flex: '1 1 auto', whiteSpace: 'normal', textTransform: 'none' }, '@media (max-width:600px)': { '& .MuiButton-root': { flexBasis: '100%' } } }}>
-          {bookingStatus === null && (
-            <>
-              <Button onClick={handleCloseConfirm} variant="outlined" sx={{ borderRadius: 2 }}>Cancel</Button>
-              <Button
-                variant="contained"
-                onClick={handleConfirmBooking}
-                sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
-              >
-                Confirm &amp; Join Queue
-              </Button>
-            </>
-          )}
-          {bookingStatus === 'error' && (
-            <>
-              <Button onClick={handleCloseConfirm} variant="outlined" sx={{ borderRadius: 2 }}>Close</Button>
-              <Button variant="contained" onClick={handleConfirmBooking} sx={{ borderRadius: 2 }}>Retry</Button>
-            </>
-          )}
-          {bookingStatus === 'success' && (
-            <>
-              <Button onClick={handleCloseConfirm} variant="outlined" sx={{ borderRadius: 2, px: 2 }}>Book Another</Button>
-              <Button
-                variant="contained"
-                startIcon={<EventAvailableOutlinedIcon />}
-                onClick={() => { handleCloseConfirm(); navigate('/appointments'); }}
-                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
-              >
-                View Appointments
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<EventAvailableOutlinedIcon />}
-                onClick={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
-                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
-              >
-                View Appointment
-              </Button>
-            </>
-          )}
-        </DialogActions>
-      </Dialog>
+        onClose={() => bookingStatus !== 'loading' && handleCloseConfirm()}
+        status={bookingStatus}
+        result={bookingResult}
+        error={bookingError}
+        onConfirm={handleConfirmBooking}
+        onBookAnother={handleCloseConfirm}
+        onViewAppointments={() => { handleCloseConfirm(); navigate('/appointments'); }}
+        onViewAppointment={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
+      />
     </Box>
   );
 }
