@@ -29,6 +29,8 @@ import {
   ListItemIcon,
   ListItemButton,
   Paper,
+  Menu,
+  MenuItem,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -371,6 +373,9 @@ export default function AppointmentsPage() {
 
   const [tab, setTab] = useState(0);
   const [appointments, setAppointments] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusAnchor, setStatusAnchor] = useState(null);
+  const [totalCount, setTotalCount] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
@@ -395,11 +400,13 @@ export default function AppointmentsPage() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(tabEndpoints[tab], { headers: authHeaders });
+        const endpoint = tabEndpoints[tab] + (statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : '');
+        const res = await fetch(endpoint, { headers: authHeaders });
         if (res.ok) {
           const data = await res.json();
           if (!mounted) return;
           setAppointments(data.results || []);
+          setTotalCount(typeof data.count === 'number' ? data.count : (data.results || []).length);
 
           // If the page was opened with appointmentId in URL, fetch and open that appointment
           const targetId = appointmentId || location?.state?.openApptId;
@@ -441,7 +448,7 @@ export default function AppointmentsPage() {
     })();
     return () => { mounted = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, token, location?.state?.openApptId, navigate, reloadKey]);
+  }, [tab, token, location?.state?.openApptId, navigate, reloadKey, statusFilter]);
 
   const handleRowClick = (appt) => {
     setSelected(appt);
@@ -610,6 +617,47 @@ export default function AppointmentsPage() {
             <Tab key={i} label={label} />
           ))}
         </Tabs>
+
+        {/* Status dropdown (persistent across tabs) */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={(e) => setStatusAnchor(e.currentTarget)}
+            sx={{ minWidth: 140, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+          >
+            {totalCount != null && (
+              <Box component="span" sx={{ fontWeight: 800 }}>{totalCount}</Box>
+            )}
+            <Box component="span" sx={{ textTransform: 'none', fontWeight: 600 }}>
+              {statusConfig[statusFilter]?.label || statusFilter}
+            </Box>
+          </Button>
+          <Menu
+            anchorEl={statusAnchor}
+            open={Boolean(statusAnchor)}
+            onClose={() => setStatusAnchor(null)}
+          >
+            {[
+              { key: 'active', label: 'Active' },
+              { key: 'inactive', label: 'Inactive' },
+              { key: 'checkin', label: 'Checked In' },
+              { key: 'checkout', label: 'Checked Out' },
+              { key: 'cancel', label: 'Cancelled' },
+            ].map((o) => (
+              <MenuItem
+                key={o.key}
+                selected={statusFilter === o.key}
+                onClick={() => {
+                  setStatusFilter(o.key);
+                  setStatusAnchor(null);
+                }}
+              >
+                {o.label}
+              </MenuItem>
+            ))}
+          </Menu>
+        </Box>
 
         {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
