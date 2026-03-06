@@ -263,8 +263,14 @@ export default function OrgBookingPage() {
         {bookSuccess && (<Fade in><Alert severity="success" sx={{ mb: 3, borderRadius: 2, fontWeight: 600 }} icon={<CheckCircleOutlineIcon />}>🎉 You've joined the queue! Redirecting to your appointments…</Alert></Fade>)}
         <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>{categories.length === 0 ? 'No services available' : 'Available Services'}</Typography>
         {categories.length === 0 && (<Typography variant="body2" color="text.secondary">This organisation has no active services at the moment.</Typography>)}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-          {categories.map((cat) => (<Fade in key={cat.id}><Box sx={{ height: '100%' }}><CategoryCard cat={cat} onSelect={handleCategorySelect} /></Box></Fade>))}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {categories.map((cat) => (
+            <Fade in key={cat.id}>
+              <Box sx={{ width: '100%' }}>
+                <CategoryCard cat={cat} onSelect={handleCategorySelect} />
+              </Box>
+            </Fade>
+          ))}
         </Box>
         <Divider sx={{ my: 3 }} />
         <Typography variant="caption" color="text.disabled" sx={{ display: 'block', textAlign: 'center' }}>Powered by sqip · Queue Management Made Simple</Typography>

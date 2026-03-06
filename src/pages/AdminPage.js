@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -22,6 +24,7 @@ import {
   DialogActions,
   TextField,
   MenuItem,
+  Menu,
   Select,
   InputLabel,
   FormControl,
@@ -32,6 +35,7 @@ import {
   Badge,
   Stack,
   Snackbar,
+  InputAdornment,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { timeOnly, formatDateTime, formatServerDateTime } from '../utils/timezone.js';
@@ -70,50 +74,65 @@ const statusConfig = {
   cancel:   { label: 'Cancelled',   bg: '#fce4ec', text: '#c62828', borderColor: '#ef9a9a' },
 };
 
-function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
+function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }) {
   const cfg = statusConfig[appt.status] || statusConfig.active;
   const canCheckin = appt.status === 'active' || appt.status === 'inactive';
   const canCheckout = appt.status === 'checkin';   // already checked-in → mark served
   const canCancel = appt.status !== 'cancel';
-  const canMove = appt.status !== 'cancel' && appt.status !== 'checkin';
+  // Disable move controls for scheduled appointments and for cancelled/checked-in ones
+  const canMove = !appt.is_scheduled && appt.status !== 'cancel' && appt.status !== 'checkin';
   // Prefer explicit first/last name supplied by the API. Fall back to username.
   const displayName = `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() || appt.username || `User #${appt.user}`;
 
   return (
     <Paper
       elevation={0}
+      ref={innerRef}
       sx={{
-        p: 2,
+        p: { xs: 1, sm: 2 },
         mb: 1,
         borderRadius: 3,
         border: `1px solid ${cfg.borderColor}`,
         borderLeft: `4px solid ${cfg.borderColor}`,
         background: cfg.bg,
         opacity: appt.status === 'cancel' ? 0.55 : 1,
-        transition: 'box-shadow 0.15s',
-        '&:hover': { boxShadow: '0 4px 18px rgba(0,0,0,0.09)' },
+        transition: 'box-shadow 0.12s',
+        '&:hover': { boxShadow: '0 6px 18px rgba(0,0,0,0.06)' },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        {/* Queue position badge */}
-        <Avatar
-          sx={{
-            width: 38,
-            height: 38,
-            background: 'linear-gradient(135deg, #833ab4, #fd1d1d)',
-            fontWeight: 800,
-            fontSize: 14,
-            flexShrink: 0,
-          }}
-        >
-          {appt.is_scheduled ? '📅' : (appt.counter ?? index + 1)}
-        </Avatar>
+  <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, flexWrap: 'wrap' }}>
+        {/* Left: avatar + appointment id (stacked) */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, flexShrink: 0, width: { xs: 48, sm: 60 } }}>
+          <Avatar
+            sx={{
+              width: { xs: 32, sm: 38 },
+              height: { xs: 32, sm: 38 },
+              background: 'linear-gradient(135deg, #833ab4, #fd1d1d)',
+              fontWeight: 700,
+              fontSize: { xs: 12, sm: 14 },
+            }}
+          >
+            {appt.is_scheduled ? '📅' : (index + 1)}
+          </Avatar>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: 10, sm: 11 } }}>#{appt.id}</Typography>
+        </Box>
 
         {/* Main info */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Typography variant="body2" fontWeight={700} noWrap>
-              #{appt.id} — {displayName}
+            <Typography
+              variant="body2"
+              fontWeight={700}
+              sx={{
+                fontSize: { xs: '0.95rem', sm: '1rem' },
+                whiteSpace: 'normal',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+              }}
+              title={displayName}
+            >
+              {displayName}
             </Typography>
             <Chip
               label={cfg.label}
@@ -128,97 +147,103 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
               }}
             />
           </Box>
-          <Stack direction="row" spacing={1.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <PersonOutlineIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-              <Typography variant="caption" color="text.secondary">
-                {displayName}
-              </Typography>
-            </Box>
-            {appt.user_email && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
+          <Stack direction="column" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
+              {/* Email and phone should be visible on mobile — allow wrapping to avoid overlap with actions */}
+              {appt.user_email && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.78rem', sm: '0.82rem' }, whiteSpace: { xs: 'normal', sm: 'nowrap' }, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: { xs: '100%', sm: '40ch' } }}
+                  title={appt.user_email}
+                >
                   ✉️ {appt.user_email}
                 </Typography>
-              </Box>
-            )}
-            {appt.user_phone && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
+              )}
+
+              {appt.user_phone && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.78rem', sm: '0.82rem' }, whiteSpace: { xs: 'normal', sm: 'nowrap' }, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: { xs: '100%', sm: '20ch' } }}
+                  title={appt.user_phone}
+                >
                   📞 {appt.user_phone}
                 </Typography>
-              </Box>
-            )}
-            {!appt.is_scheduled && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <TagIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  Queue {appt.counter ?? '—'}
-                </Typography>
-              </Box>
-            )}
+              )}
+            </Box>
+
             {appt.scheduled_time && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <CalendarTodayOutlinedIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-            {appt.scheduled_time_display
-              ? appt.scheduled_time_display
-              : appt.scheduled_time_with_category_tz
-              ? appt.scheduled_time_with_category_tz
-              : formatServerDateTime(appt.scheduled_time)}
-                    </Typography>
-              </Box>
-            )}
-            {appt.organization_name && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <BusinessOutlinedIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  {appt.organization_name}
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: { xs: '0.78rem', sm: '0.82rem' } }}>
+                  {appt.scheduled_time_display
+                    ? appt.scheduled_time_display
+                    : appt.scheduled_time_with_category_tz
+                    ? appt.scheduled_time_with_category_tz
+                    : formatServerDateTime(appt.scheduled_time)}
                 </Typography>
               </Box>
             )}
           </Stack>
         </Box>
 
-        {/* Action buttons */}
-        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
-          {/* Move Up */}
-          <Tooltip title="Move Up">
-            <span>
-              <IconButton
-                size="small"
-                disabled={loading || !canMove || index === 0}
-                onClick={() => onAction('move-up', appt, index)}
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 2,
-                  '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' },
-                }}
-              >
-                <ArrowUpwardIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
+    {/* Action buttons */}
+  <Box sx={{
+            display: 'flex',
+            gap: 1,
+            flexShrink: 0,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: { xs: 'center', sm: 'flex-end' },
+            order: { xs: 3, sm: 2 },
+            width: { xs: '100%', sm: 'auto' },
+            mt: { xs: 1, sm: 0 },
+            px: { xs: 0, sm: 'inherit' },
+          }}>
+          {/* Move Up (hidden for scheduled categories) */}
+          {!appt.is_scheduled && (
+            <Tooltip title="Move Up">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={loading || !canMove || index === 0}
+                  onClick={() => onAction('move-up', appt, index)}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' },
+                    width: { xs: 34, sm: 'auto' },
+                    height: { xs: 34, sm: 'auto' },
+                  }}
+                >
+                  <ArrowUpwardIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
 
-          {/* Move Down */}
-          <Tooltip title="Move Down">
-            <span>
-              <IconButton
-                size="small"
-                disabled={loading || !canMove || index === totalCount - 1}
-                onClick={() => onAction('move-down', appt, index)}
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 2,
-                  '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' },
-                }}
-              >
-                <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
+          {/* Move Down (hidden for scheduled categories) */}
+          {!appt.is_scheduled && (
+            <Tooltip title="Move Down">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={loading || !canMove || index === totalCount - 1}
+                  onClick={() => onAction('move-down', appt, index)}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' },
+                  }}
+                >
+                  <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
 
           {/* Check-In */}
           {canCheckin && (
@@ -229,11 +254,12 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
                   variant="contained"
                   disabled={loading}
                   onClick={() => onAction('checkin', appt)}
-                  startIcon={<CheckCircleOutlineIcon sx={{ fontSize: 15 }} />}
+                  startIcon={<CheckCircleOutlineIcon sx={{ fontSize: 14 }} />}
                   sx={{
                     borderRadius: 2,
-                    fontSize: 12,
-                    px: 1.5,
+                    fontSize: { xs: 11, sm: 12 },
+                    px: { xs: 1, sm: 1.5 },
+                    py: { xs: 0.5, sm: 0.5 },
                     background: 'linear-gradient(45deg, #1565c0, #42a5f5)',
                     '&:hover': { background: 'linear-gradient(45deg, #0d47a1, #1e88e5)' },
                   }}
@@ -279,7 +305,15 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
                   disabled={loading}
                   onClick={() => onAction('cancel', appt)}
                   startIcon={<CancelOutlinedIcon sx={{ fontSize: 15 }} />}
-                  sx={{ borderRadius: 2, fontSize: 12, px: 1.5 }}
+                  sx={{
+                    borderRadius: 2,
+                    fontSize: { xs: 11, sm: 12 },
+                    px: { xs: 0.9, sm: 1.5 },
+                    whiteSpace: 'nowrap',
+                    maxWidth: { xs: 110, sm: 'none' },
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
                 >
                   Cancel
                 </Button>
@@ -295,6 +329,9 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading }) {
 function AppointmentList({ category, apptType, refreshKey = null }) {
   // apptType: 'unscheduled' | 'scheduled'
   const [appointments, setAppointments] = useState([]);
+  const itemRefs = useRef({});
+  const [availableDates, setAvailableDates] = useState([]);
+  const [dateFilter, setDateFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
@@ -314,7 +351,27 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
       const res = await fetch(endpoint, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
-        setAppointments(data.results || []);
+        const appts = data.results || [];
+        setAppointments(appts);
+        // For scheduled appointment lists, derive distinct dates available for filtering
+        if (apptType === 'scheduled') {
+          try {
+            const dates = Array.from(new Set(
+              (appts || [])
+                .filter((a) => a.scheduled_time)
+                .map((a) => (typeof a.scheduled_time === 'string' ? a.scheduled_time.split('T')[0] : ''))
+                .filter(Boolean)
+            ));
+            // Sort ascending
+            dates.sort();
+            setAvailableDates(dates);
+          } catch (e) {
+            setAvailableDates([]);
+          }
+        } else {
+          setAvailableDates([]);
+          setDateFilter('all');
+        }
       } else {
         setError('Failed to load appointments.');
       }
@@ -339,7 +396,43 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
     })();
   }, [refreshKey]);
 
+  // If the derived availableDates change and the currently selected date is
+  // no longer present, reset the date filter to 'all'. This is kept outside
+  // of fetchAppointments to avoid capturing dateFilter in that callback's
+  // dependency array (which would break memoization rules).
+  useEffect(() => {
+    if (dateFilter && dateFilter !== 'all' && Array.isArray(availableDates) && !availableDates.includes(dateFilter)) {
+      // Schedule the reset to the next tick to avoid synchronous setState inside an effect
+      // which can trigger cascading renders and trips the eslint rule.
+      const t = setTimeout(() => setDateFilter('all'), 0);
+      return () => clearTimeout(t);
+    }
+  }, [availableDates, dateFilter]);
+
   const showToast = (msg, severity = 'success') => setToast({ open: true, msg, severity });
+  // Compute the currently displayed appointments after applying the date filter
+  const filteredAppointments = (appointments || []).filter((a) =>
+    dateFilter === 'all' || !a.scheduled_time || a.scheduled_time.split('T')[0] === dateFilter
+  );
+
+  // Format date like "3rd March 2026"
+  const formatDateLabel = (isoDate) => {
+    try {
+      const d = new Date(isoDate);
+      if (Number.isNaN(d.getTime())) return isoDate;
+      const day = d.getDate();
+      let ord = 'th';
+      if (!(day % 100 >= 11 && day % 100 <= 13)) {
+        if (day % 10 === 1) ord = 'st';
+        else if (day % 10 === 2) ord = 'nd';
+        else if (day % 10 === 3) ord = 'rd';
+      }
+      const month = d.toLocaleString(undefined, { month: 'long' });
+      return `${day}${ord} ${month} ${d.getFullYear()}`;
+    } catch (e) {
+      return isoDate;
+    }
+  };
 
   const handleAction = async (action, appt, index) => {
     setActionLoading(true);
@@ -374,12 +467,73 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
         });
       }
       if (res && res.ok) {
-        showToast(
-          action === 'checkin' ? '✅ Checked in' :
-          action === 'checkout' ? '🏁 Checked out' :
-          action === 'cancel' ? '❌ Cancelled' : '↕️ Queue updated'
-        );
-        fetchAppointments();
+        if (action === 'move-up' || action === 'move-down') {
+          // Capture previous bounding rects
+          const prevRects = {};
+          (appointments || []).forEach((a) => {
+            const el = itemRefs.current && itemRefs.current[a.id];
+            if (el && el.getBoundingClientRect) prevRects[a.id] = el.getBoundingClientRect();
+          });
+
+          // Determine the visible neighbor to swap with (respecting filters)
+          const visibleIds = (filteredAppointments || []).map((a) => a.id);
+          const visIdx = visibleIds.indexOf(appt.id);
+          let targetId = null;
+          if (action === 'move-up' && visIdx > 0) targetId = visibleIds[visIdx - 1];
+          if (action === 'move-down' && visIdx >= 0 && visIdx < visibleIds.length - 1) targetId = visibleIds[visIdx + 1];
+
+          if (targetId) {
+            const nextOrder = (appointments || []).slice();
+            const idxCurr = nextOrder.findIndex((x) => x.id === appt.id);
+            const idxTarget = nextOrder.findIndex((x) => x.id === targetId);
+            if (idxCurr !== -1 && idxTarget !== -1) {
+              [nextOrder[idxCurr], nextOrder[idxTarget]] = [nextOrder[idxTarget], nextOrder[idxCurr]];
+              // Apply updated order immediately
+              setAppointments(nextOrder);
+
+              // After render, animate from old -> new positions
+              requestAnimationFrame(() => {
+                Object.keys(prevRects).forEach((id) => {
+                  const el = itemRefs.current && itemRefs.current[id];
+                  if (!el) return;
+                  const prev = prevRects[id];
+                  const now = el.getBoundingClientRect();
+                  const dy = prev.top - now.top;
+                  if (dy) {
+                    // Add a subtle horizontal nudge and fade for a smoother, more organic swap.
+                    // Apply the inverse transform immediately, force reflow, then enable
+                    // transition and remove the transform so the browser animates into place.
+                    const dx = dy > 0 ? 6 : -6;
+                    // Set to previous position (no transition yet)
+                    el.style.transform = `translateY(${dy}px) translateX(${dx}px)`;
+                    el.style.opacity = '0.92';
+                    // Force reflow
+                    // eslint-disable-next-line no-unused-expressions
+                    el.getBoundingClientRect();
+                    // Now enable transition and animate to zero
+                    el.style.transition = 'transform 420ms cubic-bezier(0.22,1,0.36,1), opacity 420ms ease';
+                    requestAnimationFrame(() => {
+                      el.style.transform = '';
+                      el.style.opacity = '';
+                    });
+                    // Cleanup styles after animation
+                    setTimeout(() => { if (el) { el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; } }, 480);
+                  }
+                });
+              });
+            }
+          }
+
+          showToast('↕️ Queue updated');
+        } else {
+          showToast(
+            action === 'checkin' ? '✅ Checked in' :
+            action === 'checkout' ? '🏁 Checked out' :
+            action === 'cancel' ? '❌ Cancelled' : '↕️ Queue updated'
+          );
+          // For other actions, refresh the list from server to ensure canonical state
+          fetchAppointments();
+        }
       } else if (res) {
         const err = await res.json();
         showToast(err.detail || (err.errors && JSON.stringify(err.errors)) || 'Action failed', 'error');
@@ -422,14 +576,32 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
             <RefreshIcon />
           </IconButton>
         </Tooltip>
+        {/* Date filter: only for scheduled appointment lists and when dates are available */}
+        {apptType === 'scheduled' && Array.isArray(availableDates) && availableDates.length > 0 && (
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel id={`date-filter-label-${category.id}`}>Date</InputLabel>
+            <Select
+              labelId={`date-filter-label-${category.id}`}
+              value={dateFilter}
+              label="Date"
+              onChange={(e) => setDateFilter(e.target.value)}
+            >
+              <MenuItem value="all">All dates</MenuItem>
+              {availableDates.map((d) => (
+                <MenuItem key={d} value={d}>{formatDateLabel(d)}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          {/* Show counts for the currently displayed (possibly date-filtered) appointments */}
           <Typography variant="body2" color="text.secondary">
-            {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
+            {filteredAppointments.length} appointment{filteredAppointments.length !== 1 ? 's' : ''}
           </Typography>
           {appointments.length > 0 && (
             <Chip
-              label={appointments.length}
+              label={filteredAppointments.length}
               size="small"
               color="primary"
               sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
@@ -448,7 +620,7 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
         </Box>
       )}
 
-      {!loading && appointments.length === 0 && !error && (
+      {!loading && filteredAppointments.length === 0 && !error && (
         <Box sx={{ textAlign: 'center', py: 5 }}>
           <EventAvailableOutlinedIcon sx={{ fontSize: 48, opacity: 0.12, mb: 1, color: '#833ab4' }} />
           <Typography variant="body2" color="text.secondary">
@@ -457,17 +629,22 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
         </Box>
       )}
 
-      {!loading && appointments.length > 0 && (
+      {!loading && filteredAppointments.length > 0 && (
         <Fade in timeout={250}>
           <Box>
-            {appointments.map((appt, i) => (
+            {filteredAppointments.map((appt, i) => (
               <AppointmentRow
                 key={appt.id}
                 appt={appt}
                 index={i}
-                totalCount={appointments.length}
+                totalCount={filteredAppointments.length}
                 onAction={handleAction}
                 loading={actionLoading}
+                innerRef={(el) => {
+                  if (!itemRefs.current) itemRefs.current = {};
+                  if (el) itemRefs.current[appt.id] = el;
+                  else if (itemRefs.current[appt.id]) delete itemRefs.current[appt.id];
+                }}
               />
             ))}
           </Box>
@@ -540,6 +717,8 @@ function CategoryPanel({ category, refreshKey = null }) {
         />
       </Tabs>
 
+        
+
       {apptTab === 0 && (
           <AppointmentList key={`${category.id}-unscheduled`} category={category} apptType="unscheduled" refreshKey={refreshKey} />
       )}
@@ -570,6 +749,7 @@ export default function AdminPage() {
   // selected country for phone entry & per-field errors (default to India)
   const defaultCountry = COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0];
   const [selectedCountry, setSelectedCountry] = useState(defaultCountry);
+  const [countryAnchorEl, setCountryAnchorEl] = useState(null);
   const [queueFormErrors, setQueueFormErrors] = useState({});
 
   // (Intentionally no effect that sets state synchronously.)
@@ -996,18 +1176,23 @@ export default function AdminPage() {
                               setQueueForm({ first_name: '', last_name: '', phone: '', email: '' });
                               setQueueError('');
                               setQueueFormErrors({});
-                              // Auto-select country from browser locale when opening modal
+                              // Detect country for Add-to-queue: prefer timezone -> navigator.language -> fallback to India
                               try {
-                                const lang = (navigator.language || navigator.userLanguage || '').toUpperCase();
-                                const parts = lang.split('-');
-                                // Default to India if we can't match the browser locale
-                                let countryToSet = COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0];
-                                if (parts.length === 2) {
-                                  const countryCode = parts[1];
-                                  const match = COUNTRIES.find((c) => c.code === countryCode);
-                                  if (match) countryToSet = match;
+                                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                const tzMap = {
+                                  'Asia/Kolkata': 'IN',
+                                  'Europe/London': 'GB',
+                                  'America/New_York': 'US',
+                                  'Australia/Sydney': 'AU',
+                                  'America/Toronto': 'CA',
+                                };
+                                let code = tz && tzMap[tz];
+                                if (!code && typeof navigator !== 'undefined' && navigator.language) {
+                                  const parts = navigator.language.split('-');
+                                  if (parts.length > 1) code = parts[1].toUpperCase();
                                 }
-                                setSelectedCountry(countryToSet);
+                                const sel = COUNTRIES.find((c) => c.code === code) || COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0];
+                                setSelectedCountry(sel);
                               } catch (e) {
                                 setSelectedCountry(COUNTRIES.find((c) => c.code === 'IN') || COUNTRIES[0]);
                               }
@@ -1021,47 +1206,87 @@ export default function AdminPage() {
                       </Box>
                     </Box>
 
-                    {/* Opening hours summary (for scheduled categories) */}
-                    {currentCategory.is_scheduled && currentCategory.opening_hours && Object.keys(currentCategory.opening_hours).length > 0 && (
+                    {/* Combined Hours card: Opening Hours + Break Hours for scheduled categories */}
+                    {currentCategory && currentCategory.is_scheduled && (
                       <Paper
                         elevation={0}
                         sx={{
-                          p: 2,
+                          p: { xs: 1.5, sm: 2 },
                           mb: 3,
                           borderRadius: 3,
                           border: '1px solid',
                           borderColor: 'divider',
-                          bgcolor: '#f8f5ff',
+                          bgcolor: '#f7f4ff',
                         }}
                       >
-                        <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: '#833ab4' }}>
-                          🕐 Opening Hours
+                        <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: '#6a1b9a', display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <AccessTimeOutlinedIcon sx={{ fontSize: 18 }} /> Hours
                         </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                          {Object.entries(currentCategory.opening_hours).map(([day, ranges]) => (
-                            <Chip
-                              key={day}
-                              size="small"
-                              label={
-                                ranges && Array.isArray(ranges) && ranges.length > 0
-                                  ? `${day.slice(0, 3)}: ${ranges[0][0]}–${ranges[0][1]}`
-                                  : `${day.slice(0, 3)}: Closed`
-                              }
-                              sx={{
-                                fontSize: 11,
-                                bgcolor: ranges && Array.isArray(ranges) && ranges.length > 0 ? '#ede7f6' : '#f5f5f5',
-                                color: ranges && Array.isArray(ranges) && ranges.length > 0 ? '#4a148c' : '#9e9e9e',
-                              }}
-                            />
-                          ))}
+
+                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="caption" fontWeight={700} sx={{ color: '#833ab4', display: 'block', mb: 1 }}>
+                              Opening Hours
+                            </Typography>
+                            {Object.keys(currentCategory.opening_hours || {}).length > 0 ? (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {Object.entries(currentCategory.opening_hours).map(([day, ranges]) => (
+                                  <Chip
+                                    key={`open-${day}`}
+                                    size="small"
+                                    label={
+                                      ranges && Array.isArray(ranges) && ranges.length > 0
+                                        ? `${day.slice(0, 3)}: ${ranges[0][0]}–${ranges[0][1]}`
+                                        : `${day.slice(0, 3)}: Closed`
+                                    }
+                                    sx={{
+                                      fontSize: 11,
+                                      bgcolor: ranges && Array.isArray(ranges) && ranges.length > 0 ? '#ede7f6' : '#f5f5f5',
+                                      color: ranges && Array.isArray(ranges) && ranges.length > 0 ? '#4a148c' : '#9e9e9e',
+                                    }}
+                                  />
+                                ))}
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">No opening hours configured.</Typography>
+                            )}
+                            {currentCategory.time_interval_per_appointment && (
+                              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                Slot interval: {typeof currentCategory.time_interval_per_appointment === 'string'
+                                  ? currentCategory.time_interval_per_appointment
+                                  : `${currentCategory.time_interval_per_appointment} min`}
+                              </Typography>
+                            )}
+                          </Box>
+
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="caption" fontWeight={700} sx={{ color: '#8a4b00', display: 'block', mb: 1 }}>
+                              Break Hours
+                            </Typography>
+                            {Object.keys(currentCategory.break_hours || {}).length > 0 ? (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {Object.entries(currentCategory.break_hours).map(([day, ranges]) => (
+                                  <Chip
+                                    key={`break-${day}`}
+                                    size="small"
+                                    label={
+                                      ranges && Array.isArray(ranges) && ranges.length > 0
+                                        ? `${day.slice(0, 3)}: ${ranges.map((r) => `${r[0]}–${r[1]}`).join(', ')}`
+                                        : `${day.slice(0, 3)}: —`
+                                    }
+                                    sx={{
+                                      fontSize: 11,
+                                      bgcolor: ranges && Array.isArray(ranges) && ranges.length > 0 ? '#fff3e0' : '#f5f5f5',
+                                      color: ranges && Array.isArray(ranges) && ranges.length > 0 ? '#e65100' : '#9e9e9e',
+                                    }}
+                                  />
+                                ))}
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">No break hours configured for this category.</Typography>
+                            )}
+                          </Box>
                         </Box>
-                        {currentCategory.time_interval_per_appointment && (
-                          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                            Slot interval: {typeof currentCategory.time_interval_per_appointment === 'string'
-                              ? currentCategory.time_interval_per_appointment
-                              : `${currentCategory.time_interval_per_appointment} min`}
-                          </Typography>
-                        )}
                       </Paper>
                     )}
 
@@ -1103,6 +1328,7 @@ export default function AdminPage() {
               <Grid item xs={12} sm={6}>
                 <TextField
                   required
+                  size="small"
                   label="First name"
                   value={queueForm.first_name}
                   onChange={(e) => setQueueForm((f) => ({ ...f, first_name: e.target.value }))}
@@ -1113,6 +1339,7 @@ export default function AdminPage() {
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
+                  size="small"
                   label="Last name"
                   value={queueForm.last_name}
                   onChange={(e) => setQueueForm((f) => ({ ...f, last_name: e.target.value }))}
@@ -1120,37 +1347,45 @@ export default function AdminPage() {
                 />
               </Grid>
 
-              <Grid item xs={4} sm={3}>
-                <FormControl fullWidth>
-                  <InputLabel id="country-select-label">Country</InputLabel>
-                  <Select
-                    labelId="country-select-label"
-                    value={selectedCountry.code}
-                    label="Country"
-                    onChange={(e) => {
-                      const c = COUNTRIES.find((cc) => cc.code === e.target.value) || COUNTRIES[0];
-                      setSelectedCountry(c);
-                    }}
-                    renderValue={(val) => {
-                      const c = COUNTRIES.find((cc) => cc.code === val);
-                      return c ? `${c.flag} ${c.dial}` : val;
-                    }}
-                  >
-                    {COUNTRIES.map((c) => (
-                      <MenuItem key={c.code} value={c.code}>{c.flag} {c.label} ({c.dial})</MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>Country code</FormHelperText>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={8} sm={9}>
+              <Grid item xs={12}>
                 <TextField
                   required
+                  size="small"
                   label="Phone"
                   value={queueForm.phone}
                   onChange={(e) => setQueueForm((f) => ({ ...f, phone: e.target.value }))}
                   fullWidth
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start" sx={{ mr: 1 }}>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => setCountryAnchorEl(e.currentTarget)}
+                          sx={{ mr: 0, p: 0, minWidth: 36, display: 'inline-flex', alignItems: 'center' }}
+                        >
+                          <Typography sx={{ fontSize: 14, lineHeight: 1 }}>{selectedCountry.flag}</Typography>
+                          <Typography sx={{ fontSize: 12, color: 'text.secondary', ml: 0.5 }}>{selectedCountry.dial}</Typography>
+                        </IconButton>
+                        <Menu
+                          anchorEl={countryAnchorEl}
+                          open={Boolean(countryAnchorEl)}
+                          onClose={() => setCountryAnchorEl(null)}
+                        >
+                          {COUNTRIES.map((c) => (
+                            <MenuItem
+                              key={c.code}
+                              onClick={() => {
+                                setSelectedCountry(c);
+                                setCountryAnchorEl(null);
+                              }}
+                            >
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>{c.flag}<Typography sx={{ ml: 0.5 }}>{c.label} ({c.dial})</Typography></Box>
+                            </MenuItem>
+                          ))}
+                        </Menu>
+                      </InputAdornment>
+                    ),
+                  }}
                   error={!!queueFormErrors.phone}
                   helperText={queueFormErrors.phone || 'Enter local phone number (will be saved with selected country code)'}
                 />
@@ -1158,6 +1393,7 @@ export default function AdminPage() {
 
               <Grid item xs={12}>
                 <TextField
+                  size="small"
                   label="Email (optional)"
                   value={queueForm.email}
                   onChange={(e) => setQueueForm((f) => ({ ...f, email: e.target.value }))}

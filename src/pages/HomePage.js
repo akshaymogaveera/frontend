@@ -880,13 +880,15 @@ export default function HomePage() {
                       {orgs.length} organization{orgs.length !== 1 ? 's' : ''} found
                     </Typography>
                   </Box>
-                  <Grid container spacing={2}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {orgs.map((org) => (
-                      <Grid item xs={12} sm={6} md={4} key={org.id}>
-                        <OrgCard org={org} onClick={() => handleSelectOrg(org)} />
-                      </Grid>
+                      <Fade in key={org.id}>
+                        <Box sx={{ width: '100%' }}>
+                          <OrgCard org={org} onClick={() => handleSelectOrg(org)} />
+                        </Box>
+                      </Fade>
                     ))}
-                  </Grid>
+                  </Box>
                 </>
               )}
 
@@ -958,13 +960,15 @@ export default function HomePage() {
               {catError && <Alert severity="info" sx={{ borderRadius: 2 }}>{catError}</Alert>}
 
               {!loadingCats && categories.length > 0 && (
-                <Grid container spacing={2}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {categories.map((cat) => (
-                    <Grid item xs={12} sm={6} key={cat.id} sx={{ display: 'flex', alignItems: 'stretch' }}>
-                      <CategoryCard category={cat} onClick={() => handleSelectCategory(cat)} />
-                    </Grid>
+                    <Fade in key={cat.id}>
+                      <Box sx={{ width: '100%' }}>
+                        <CategoryCard category={cat} onClick={() => handleSelectCategory(cat)} />
+                      </Box>
+                    </Fade>
                   ))}
-                </Grid>
+                </Box>
               )}
             </Box>
           </Fade>
