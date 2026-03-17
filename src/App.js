@@ -11,24 +11,27 @@ import OrgBookingPage from './pages/OrgBookingPage.js';
 const theme = createTheme({
   palette: {
     mode: 'light',
+    // Primary color is neutralized (blue is used for system primary),
+    // but the main CTA uses a teal -> blue gradient defined below.
     primary: {
-      main: '#833ab4',
-      light: '#c56cd6',
-      dark: '#5c1f8a',
-      contrastText: '#fff',
-    },
-    secondary: {
-      main: '#fd1d1d',
-      light: '#ff6b6b',
-      dark: '#c40000',
+      main: '#007BFF',
+      contrastText: '#ffffff',
     },
     background: {
-      default: '#fafafa',
+      default: '#ffffff',
       paper: '#ffffff',
     },
     text: {
-      primary: '#262626',
-      secondary: '#8e8e8e',
+      // Brand / headings / navigation text should use Deep Slate Blue
+      primary: '#2D546E',
+      secondary: '#6b7b84',
+    },
+    // Custom palette tokens for centralized theme usage in JS/TS
+    custom: {
+      teal: '#00C4CC',
+      mint: '#E0F7F9',
+      deepSlate: '#2D546E',
+      gradientPrimary: 'linear-gradient(90deg, #00C4CC 0%, #007BFF 100%)',
     },
   },
   typography: {
@@ -49,9 +52,12 @@ const theme = createTheme({
           borderRadius: 8,
         },
         containedPrimary: {
-          background: 'linear-gradient(45deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
+          // vibrant teal -> blue gradient for main CTAs
+          background: 'linear-gradient(90deg, #00C4CC 0%, #007BFF 100%)',
+          color: '#ffffff !important',
           '&:hover': {
-            background: 'linear-gradient(45deg, #6a2d9f 0%, #e01010 50%, #e09a30 100%)',
+            // slightly darker hover gradient
+            background: 'linear-gradient(90deg, #00A9B0 0%, #006FE6 100%)',
           },
         },
       },

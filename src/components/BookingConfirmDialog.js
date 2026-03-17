@@ -23,7 +23,7 @@ export default function BookingConfirmDialog({
       fullWidth
       PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
     >
-      <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
+  <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
       <DialogTitle sx={{ fontWeight: 700, pb: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         {status === 'success' ? 'Booking Confirmed! 🎉' : 'Confirm Appointment'}
         <IconButton size="small" onClick={onClose} sx={{ color: 'text.secondary' }}>
@@ -68,7 +68,7 @@ export default function BookingConfirmDialog({
         {status === null && (
           <>
             <Button onClick={onClose} variant="outlined" sx={{ borderRadius: 2 }}>Cancel</Button>
-            <Button variant="contained" onClick={onConfirm} sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}>Confirm &amp; Join Queue</Button>
+            <Button variant="contained" color="primary" onClick={onConfirm} sx={{ borderRadius: 2, color: '#fff' }}>Confirm &amp; Join Queue</Button>
           </>
         )}
         {status === 'error' && (
@@ -80,9 +80,9 @@ export default function BookingConfirmDialog({
               sx={{
                 borderRadius: 30,
                 px: 4,
-                color: '#6a1b9a',
-                borderColor: 'rgba(106,27,154,0.25)',
-                '&:hover': { borderColor: 'rgba(106,27,154,0.4)' },
+                 color: (theme) => theme.palette.custom ? theme.palette.custom.deepSlate : '#2D546E',
+                 borderColor: 'rgba(0,0,0,0.08)',
+                 '&:hover': { borderColor: 'rgba(0,0,0,0.12)' },
               }}
             >
               Close
@@ -90,26 +90,13 @@ export default function BookingConfirmDialog({
 
             {/* If the server indicates the appointment already exists, hide Retry and show View Appointments if available. */}
             {!(error && /already exist/i.test(error)) ? (
-              <Button variant="contained" onClick={onConfirm} sx={{ borderRadius: 30, px: 4, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}>Retry</Button>
+              <Button variant="contained" color="primary" onClick={onConfirm} sx={{ borderRadius: 30, px: 4, color: '#fff' }}>Retry</Button>
             ) : (
               onViewAppointments ? (
-                <Button
-                  variant="contained"
-                  startIcon={<EventAvailableOutlinedIcon />}
-                  onClick={onViewAppointments}
-                  sx={{
-                    borderRadius: 30,
-                    px: 4,
-                    background: 'linear-gradient(45deg, #833ab4, #fd1d1d)',
-                    boxShadow: '0 8px 24px rgba(131,58,180,0.18)',
-                    color: '#fff',
-                  }}
-                >
-                  View Appointments
-                </Button>
+                <Button variant="contained" color="primary" startIcon={<EventAvailableOutlinedIcon />} onClick={onViewAppointments} sx={{ borderRadius: 30, px: 4, color: '#fff' }}>View Appointments</Button>
               ) : (
                 // Fallback: keep a Retry button if no view action provided
-                <Button variant="contained" onClick={onConfirm} sx={{ borderRadius: 30, px: 4 }}>Retry</Button>
+                <Button variant="contained" color="primary" onClick={onConfirm} sx={{ borderRadius: 30, px: 4, color: '#fff' }}>Retry</Button>
               )
             )}
           </>
@@ -117,8 +104,8 @@ export default function BookingConfirmDialog({
         {status === 'success' && (
           <>
             <Button onClick={onBookAnother} variant="outlined" sx={{ borderRadius: 2 }}>Book Another</Button>
-            <Button variant="contained" startIcon={<EventAvailableOutlinedIcon />} onClick={onViewAppointments} sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}>View Appointments</Button>
-            <Button variant="contained" startIcon={<EventAvailableOutlinedIcon />} onClick={onViewAppointment} sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)' }}>View Appointment</Button>
+              <Button variant="contained" startIcon={<EventAvailableOutlinedIcon />} onClick={onViewAppointments} color="primary" sx={{ borderRadius: 2, px: 2, color: '#fff' }}>View Appointments</Button>
+              <Button variant="contained" startIcon={<EventAvailableOutlinedIcon />} onClick={onViewAppointment} color="primary" sx={{ borderRadius: 2, px: 2, color: '#fff' }}>View Appointment</Button>
           </>
         )}
       </DialogActions>

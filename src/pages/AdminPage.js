@@ -107,7 +107,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
             sx={{
               width: { xs: 32, sm: 38 },
               height: { xs: 32, sm: 38 },
-              background: 'linear-gradient(135deg, #833ab4, #fd1d1d)',
+              background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
               fontWeight: 700,
               fontSize: { xs: 12, sm: 14 },
             }}
@@ -260,8 +260,8 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
                     fontSize: { xs: 11, sm: 12 },
                     px: { xs: 1, sm: 1.5 },
                     py: { xs: 0.5, sm: 0.5 },
-                    background: 'linear-gradient(45deg, #1565c0, #42a5f5)',
-                    '&:hover': { background: 'linear-gradient(45deg, #0d47a1, #1e88e5)' },
+                    background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                    '&:hover': { opacity: 0.95 },
                   }}
                 >
                   Check In
@@ -284,8 +284,8 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
                     borderRadius: 2,
                     fontSize: 12,
                     px: 1.5,
-                    background: 'linear-gradient(45deg, #2e7d32, #66bb6a)',
-                    '&:hover': { background: 'linear-gradient(45deg, #1b5e20, #43a047)' },
+                    background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                    '&:hover': { opacity: 0.95 },
                   }}
                 >
                   Checkout
@@ -557,7 +557,7 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
           sx={{
             minWidth: 240,
             '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 40, py: 0.5 },
-            '& .MuiTabs-indicator': { height: 3, borderRadius: 2, background: 'linear-gradient(90deg, #833ab4, #fd1d1d)' },
+            '& .MuiTabs-indicator': { height: 3, borderRadius: 2, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' },
           }}
         >
           <Tab label="Active" value="active" />
@@ -622,7 +622,7 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
 
       {!loading && filteredAppointments.length === 0 && !error && (
         <Box sx={{ textAlign: 'center', py: 5 }}>
-          <EventAvailableOutlinedIcon sx={{ fontSize: 48, opacity: 0.12, mb: 1, color: '#833ab4' }} />
+          <EventAvailableOutlinedIcon sx={{ fontSize: 48, opacity: 0.12, mb: 1, color: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC' }} />
           <Typography variant="body2" color="text.secondary">
             No <strong>{statusFilter}</strong> {apptType} appointments.
           </Typography>
@@ -699,10 +699,10 @@ function CategoryPanel({ category, refreshKey = null }) {
           mb: 2.5,
           '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 40, py: 0.5 },
           '& .MuiTabs-indicator': {
-            background: 'linear-gradient(90deg, #833ab4, #fd1d1d)',
-            height: 3,
-            borderRadius: 2,
-          },
+              background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+              height: 3,
+              borderRadius: 2,
+            },
         }}
       >
         <Tab
@@ -956,20 +956,8 @@ export default function AdminPage() {
         <Fade in timeout={400}>
           <Box sx={{ mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-              <AdminPanelSettingsOutlinedIcon
-                sx={{ fontSize: 32, color: '#833ab4' }}
-              />
-              <Typography
-                variant="h4"
-                fontWeight={900}
-                sx={{
-                  background: 'linear-gradient(90deg, #833ab4 0%, #fd1d1d 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
-                Admin Dashboard
-              </Typography>
+              <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 32, color: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC' }} />
+              <Typography variant="h4" fontWeight={900} sx={{ color: 'text.primary' }}>Admin Dashboard</Typography>
             </Box>
             <Typography variant="body2" color="text.secondary">
               Manage queues, check-ins, and category status across your organization.
@@ -990,7 +978,7 @@ export default function AdminPage() {
 
         {!loading && categories.length === 0 && !error && (
           <Box sx={{ textAlign: 'center', py: 10 }}>
-            <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 72, opacity: 0.15, mb: 2, color: '#833ab4' }} />
+            <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 72, opacity: 0.15, mb: 2, color: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC' }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
               No categories assigned
             </Typography>
@@ -1026,7 +1014,7 @@ export default function AdminPage() {
                     bgcolor: 'background.paper',
                     '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', minHeight: 52 },
                     '& .MuiTabs-indicator': {
-                      background: 'linear-gradient(90deg, #833ab4, #fd1d1d)',
+                      background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
                       height: 4,
                       borderRadius: 2,
                     },
@@ -1058,7 +1046,7 @@ export default function AdminPage() {
                     scrollButtons="auto"
                     sx={{
                       '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 48 },
-                      '& .MuiTabs-indicator': { background: 'linear-gradient(90deg, #833ab4, #fd1d1d)', height: 3, borderRadius: 2 },
+                      '& .MuiTabs-indicator': { background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)', height: 3, borderRadius: 2 },
                       px: 1,
                     }}
                   >
@@ -1225,7 +1213,7 @@ export default function AdminPage() {
 
                         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
                           <Box sx={{ flex: 1 }}>
-                            <Typography variant="caption" fontWeight={700} sx={{ color: '#833ab4', display: 'block', mb: 1 }}>
+                            <Typography variant="caption" fontWeight={700} sx={{ color: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC', display: 'block', mb: 1 }}>
                               Opening Hours
                             </Typography>
                             {Object.keys(currentCategory.opening_hours || {}).length > 0 ? (
@@ -1411,10 +1399,10 @@ export default function AdminPage() {
             disabled={queueLoading}
             sx={{
               borderRadius: 3,
-              background: 'linear-gradient(90deg,#833ab4,#fd1d1d)',
+              background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
               color: '#fff',
               px: 3,
-              '&:hover': { background: 'linear-gradient(90deg,#6f2a9f,#e21b2b)' },
+              '&:hover': { opacity: 0.95 },
             }}
           >
             {queueLoading ? <CircularProgress size={18} color="inherit" /> : 'Add to queue'}

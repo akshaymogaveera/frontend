@@ -62,12 +62,12 @@ function CategoryCard({ cat, onSelect }) {
             right: 0,
             top: 0,
             height: 5,
-            background: isScheduled ? 'linear-gradient(90deg, #1565c0, #42a5f5)' : 'linear-gradient(90deg, #833ab4, #fd1d1d)',
+            background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
           }}
         />
         <CardContent sx={{ p: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', width: '100%' }}>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mt: 1 }}>
-            <Avatar sx={{ width: 40, height: 40, background: isScheduled ? 'linear-gradient(135deg, #1565c0, #42a5f5)' : 'linear-gradient(135deg, #833ab4, #fd1d1d)', flexShrink: 0 }}>
+            <Avatar sx={{ width: 40, height: 40, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)', flexShrink: 0 }}>
               {isScheduled ? <EventNoteIcon sx={{ fontSize: 20 }} /> : <DirectionsWalkIcon sx={{ fontSize: 20 }} />}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -142,7 +142,7 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
 
   return (
     <Dialog open={open} onClose={() => !loading && onClose()} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}>
-      <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d)' }} />
+      <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
       <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         Join Walk-in Queue
         <Button size="small" onClick={() => !loading && onClose()} sx={{ color: 'text.secondary' }} startIcon={<CloseIcon />}>Close</Button>
@@ -152,11 +152,11 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
         {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-        <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>Cancel</Button>
+          <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>Cancel</Button>
         {/* If server reports a duplicate appointment error, hide the Confirm button to
             prevent repeated submissions. Use a case-insensitive match for 'already exist'. */}
         {!(error && /already exist/i.test(error)) && (
-          <Button onClick={handleBook} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />} sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}>{loading ? 'Booking…' : 'Confirm'}</Button>
+          <Button onClick={handleBook} variant="contained" color="primary" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />} sx={{ borderRadius: 2 }}>{loading ? 'Booking…' : 'Confirm'}</Button>
         )}
       </DialogActions>
     </Dialog>
@@ -281,13 +281,13 @@ export default function OrgBookingPage() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 60%, #fcb045 100%)', color: '#fff', pt: isMobile ? 4 : 5, pb: isMobile ? 5 : 6, px: isMobile ? 2.5 : 4, position: 'relative' }}>
+  <Box sx={{ background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)', color: '#fff', pt: isMobile ? 4 : 5, pb: isMobile ? 5 : 6, px: isMobile ? 2.5 : 4, position: 'relative' }}>
         <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate(isLoggedIn ? '/home' : '/')} sx={{ color: 'rgba(255,255,255,0.75)', mb: 2, textTransform: 'none', fontWeight: 500 }}>{isLoggedIn ? 'Home' : 'Sign In'}</Button>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
           <Avatar sx={{ width: 52, height: 52, bgcolor: 'rgba(255,255,255,0.2)', fontSize: 22, fontWeight: 800 }}><BusinessOutlinedIcon sx={{ fontSize: 28 }} /></Avatar>
           <Box>
             <Typography variant="h5" fontWeight={900} sx={{ lineHeight: 1.2 }}>{org?.name}</Typography>
-            {org?.type && <Chip label={org.type} size="small" sx={{ mt: 0.5, height: 20, fontSize: 11, fontWeight: 600, bgcolor: 'rgba(255,255,255,0.22)', color: '#fff' }} />}
+            {org?.type && <Chip label={org.type} size="small" sx={{ mt: 0.5, height: 20, fontSize: 11, fontWeight: 600, bgcolor: (theme) => theme.palette.custom.mint, color: (theme) => theme.palette.custom.deepSlate }} />}
           </Box>
         </Box>
         {(org?.city || org?.country) && (<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1, opacity: 0.85 }}><LocationOnOutlinedIcon sx={{ fontSize: 15 }} /><Typography variant="body2">{[org.city, org.state, org.country].filter(Boolean).join(', ')}</Typography></Box>)}

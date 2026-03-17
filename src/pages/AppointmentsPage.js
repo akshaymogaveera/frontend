@@ -82,7 +82,7 @@ function AppointmentRow({ appt, onClick }) {
         borderColor: 'divider',
         borderLeft: `5px solid ${borderColor[appt.status] || '#bdbdbd'}`,
         bgcolor: 'background.paper',
-        '&:hover': { bgcolor: 'rgba(131,58,180,0.04)', borderColor: 'primary.light' },
+  '&:hover': { bgcolor: (theme) => theme.palette.custom ? theme.palette.custom.mint : '#E0F7F9', borderColor: 'primary.light' },
         py: isMobile ? 2 : 1.5,
         px: 2,
         gap: 0,
@@ -97,14 +97,12 @@ function AppointmentRow({ appt, onClick }) {
           fontSize: isMobile ? 16 : 13,
           fontWeight: 900,
           mr: 2,
-          background: appt.status === 'active'
-            ? 'linear-gradient(135deg, #833ab4, #fd1d1d)'
-            : appt.status === 'checkin'
-            ? 'linear-gradient(135deg, #1565c0, #42a5f5)'
+          background: (theme) => appt.status === 'active' || appt.status === 'checkin'
+            ? (theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)')
             : 'rgba(0,0,0,0.1)',
           color: ['active', 'checkin'].includes(appt.status) ? '#fff' : '#666',
           flexShrink: 0,
-          boxShadow: appt.status === 'active' ? '0 2px 8px rgba(131,58,180,0.35)' : 'none',
+          boxShadow: appt.status === 'active' ? '0 2px 8px rgba(0,123,255,0.18)' : 'none',
         }}
       >
         {appt.counter != null ? `#${appt.counter}` : '–'}
@@ -167,13 +165,13 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
       }}
     >
       {/* Header */}
-      <Box
-        sx={{
-          background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%)',
-          p: 3,
-          pb: 2,
-          color: '#fff',
-        }}
+        <Box
+          sx={{
+            background: (theme) => theme.palette.custom ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)` : 'var(--gradient-primary)',
+            p: 3,
+            pb: 2,
+            color: '#fff',
+          }}
       >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Box>
@@ -188,9 +186,9 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
             <Chip
               label={cfg.label}
               size="small"
-              sx={{ bgcolor: 'rgba(255,255,255,0.25)', color: '#fff', fontWeight: 700, fontSize: 12 }}
+              sx={{ bgcolor: 'rgba(255,255,255,0.25)', color: (theme) => theme.palette.custom.deepSlate, fontWeight: 700, fontSize: 12, textShadow: '0 1px 0 rgba(255,255,255,0.06)' }}
             />
-            <IconButton onClick={onClose} size="small" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            <IconButton onClick={onClose} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate }}>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -493,7 +491,7 @@ export default function AppointmentsPage() {
       {isMobile && firstActive && (
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%)',
+            background: (theme) => theme.palette.custom ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)` : 'var(--gradient-primary)',
             color: '#fff',
             px: 3,
             pt: 3,
@@ -545,18 +543,7 @@ export default function AppointmentsPage() {
             <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
               <Box>
                 {!isMobile && (
-                  <Typography
-                    variant="h4"
-                    fontWeight={900}
-                    sx={{
-                      background: 'linear-gradient(90deg, #833ab4 0%, #fd1d1d 100%)',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      mb: 0.5,
-                    }}
-                  >
-                    My Appointments
-                  </Typography>
+                  <Typography variant="h4" fontWeight={900} sx={{ color: 'text.primary', mb: 0.5 }}>My Appointments</Typography>
                 )}
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: isMobile ? 0 : 1 }}>
                   {activeCount > 0 && (
@@ -575,20 +562,37 @@ export default function AppointmentsPage() {
                   <IconButton
                     onClick={() => setReloadKey((r) => r + 1)}
                     disabled={loading}
-                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      bgcolor: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+                      '&:hover': { bgcolor: (theme) => theme.palette.custom ? theme.palette.primary.main : '#007BFF' },
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
-                    {loading ? <CircularProgress size={18} /> : <RefreshIcon />}
+                    {loading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : <RefreshIcon />}
                   </IconButton>
                 </Tooltip>
                 <Button
                   variant="contained"
+                  color="primary"
                   startIcon={<AddCircleOutlineIcon />}
                   onClick={() => navigate('/home')}
                   size={isMobile ? 'small' : 'medium'}
                   sx={{
-                    borderRadius: 2,
-                    background: 'linear-gradient(45deg, #833ab4, #fd1d1d)',
-                    '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' },
+                    borderRadius: 12,
+                    px: 3,
+                    py: 1.25,
+                    background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                    color: '#fff',
+                    boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+                    '& .MuiButton-startIcon': { color: '#fff' },
+                    '&:hover': { opacity: 0.95 },
                   }}
                 >
                   {isMobile ? 'Book' : 'Book New'}
@@ -607,7 +611,7 @@ export default function AppointmentsPage() {
             mb: isMobile ? 2 : 3,
             '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minWidth: isMobile ? 0 : 80 },
             '& .MuiTabs-indicator': {
-              background: 'linear-gradient(90deg, #833ab4, #fd1d1d)',
+              background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
               height: 3,
               borderRadius: 2,
             },
@@ -692,25 +696,14 @@ export default function AppointmentsPage() {
         {!loading && appointments.length === 0 && !error && (
           <Fade in timeout={300}>
             <Box sx={{ textAlign: 'center', py: isMobile ? 8 : 10 }}>
-              <EventAvailableOutlinedIcon sx={{ fontSize: 72, opacity: 0.12, mb: 2, color: '#833ab4' }} />
+              <EventAvailableOutlinedIcon sx={{ fontSize: 72, opacity: 0.12, mb: 2, color: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC' }} />
               <Typography variant="h6" fontWeight={600} color="text.secondary" gutterBottom>
                 No appointments here
               </Typography>
               <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
                 Join a queue to see your appointments.
               </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddCircleOutlineIcon />}
-                onClick={() => navigate('/home')}
-                sx={{
-                  borderRadius: 2,
-                  background: 'linear-gradient(45deg, #833ab4, #fd1d1d)',
-                  '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' },
-                }}
-              >
-                Find a Queue
-              </Button>
+              <Button variant="contained" color="primary" startIcon={<AddCircleOutlineIcon />} onClick={() => navigate('/home')} sx={{ borderRadius: 2 }}>Find a Queue</Button>
             </Box>
           </Fade>
         )}
@@ -733,7 +726,7 @@ export default function AppointmentsPage() {
         fullScreen={isMobile}
         PaperProps={{ sx: { borderRadius: isMobile ? 0 : 4, overflow: 'hidden' } }}
       >
-        <Box sx={{ height: 4, background: 'linear-gradient(90deg, #e74c3c, #c0392b)' }} />
+  <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
         <DialogTitle sx={{ fontWeight: 700 }}>Cancel Appointment</DialogTitle>
         <DialogContent>
           {cancelTarget && (

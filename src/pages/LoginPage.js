@@ -13,7 +13,7 @@ function LoginPage() {
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #405de6 0%, #5851db 15%, #833ab4 35%, #c13584 55%, #e1306c 75%, #fd1d1d 90%, #fcb045 100%)',
+        background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -21,8 +21,8 @@ function LoginPage() {
       }}
     >
       <Paper elevation={24} sx={{ width: '100%', maxWidth: 420, borderRadius: 4, overflow: 'hidden', p: 0 }}>
-        {/* Top accent bar */}
-        <Box sx={{ height: 5, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
+  {/* Top accent bar */}
+  <Box sx={{ height: 5, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
         <LoginForm redirectFrom={from} preSelectOrg={preSelectOrg} preSelectCat={preSelectCat} />
       </Paper>
     </Box>

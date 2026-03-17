@@ -85,7 +85,7 @@ function OrgCard({ org, onClick }) {
               sx={{
                 width: 44,
                 height: 44,
-                background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%)',
+                background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary,
                 fontSize: 18,
               }}
             >
@@ -162,9 +162,7 @@ function CategoryCard({ category, onClick }) {
               sx={{
                 width: 44,
                 height: 44,
-                background: isScheduled
-                  ? 'linear-gradient(135deg, #1565c0 0%, #42a5f5 100%)'
-                  : 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%)',
+                background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary,
                 fontSize: 18,
               }}
             >
@@ -210,8 +208,8 @@ function CategoryCard({ category, onClick }) {
                 fontSize: 11,
                 height: 22,
                 fontWeight: 600,
-                bgcolor: isScheduled ? '#e3f2fd' : '#f3e5f5',
-                color: isScheduled ? '#1565c0' : '#6a1b9a',
+                bgcolor: (theme) => (isScheduled ? theme.palette.custom.mint : 'rgba(45,84,110,0.06)'),
+                color: (theme) => (isScheduled ? theme.palette.primary.main : theme.palette.custom.deepSlate),
               }}
             />
             {category.type && (
@@ -850,9 +848,7 @@ export default function HomePage() {
               variant="h4"
               fontWeight={900}
               sx={{
-                background: 'linear-gradient(90deg, #833ab4 0%, #fd1d1d 60%, #fcb045 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: 'text.primary',
                 mb: 0.5,
               }}
             >
@@ -921,15 +917,10 @@ export default function HomePage() {
                 />
                 <Button
                   variant="contained"
+                  color="primary"
                   onClick={() => { skipDebounceRef.current = true; handleSearch(query, 1); }}
                   disabled={searching || !query.trim()}
-                  sx={{
-                    minWidth: 110,
-                    borderRadius: 3,
-                    px: 3,
-                    background: 'linear-gradient(45deg, #833ab4 0%, #fd1d1d 100%)',
-                    '&:hover': { background: 'linear-gradient(45deg, #6a2d9f 0%, #c40000 100%)' },
-                  }}
+                  sx={{ minWidth: 110, borderRadius: 3, px: 3, color: '#fff' }}
                 >
                   {searching ? <CircularProgress size={20} color="inherit" /> : 'Search'}
                 </Button>
@@ -1050,7 +1041,7 @@ export default function HomePage() {
         {step === 'categories' && (
           <Fade in timeout={300}>
             <Box>
-              <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 100%)' }}>
+              <Card sx={{ mb: 3, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary }}>
                 <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <IconButton
                     onClick={resetToSearch}
@@ -1122,11 +1113,11 @@ export default function HomePage() {
         fullWidth
         PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
       >
-        <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
+  <Box sx={{ height: 4, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary }} />
         <DialogTitle sx={{ fontWeight: 700, pb: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {scheduledBookingStatus === 'success' ? 'Appointment Booked! 🎉' : (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarTodayOutlinedIcon sx={{ color: '#833ab4' }} />
+              <CalendarTodayOutlinedIcon sx={{ color: (theme) => theme.palette.custom.teal }} />
               Schedule an Appointment
             </Box>
           )}
@@ -1333,7 +1324,7 @@ export default function HomePage() {
                 variant="contained"
                 startIcon={<EventAvailableOutlinedIcon />}
                 onClick={() => { handleCloseScheduled(); navigate('/appointments'); }}
-                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
+                sx={{ borderRadius: 2, px: 2, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary, color: '#fff', '&:hover': { opacity: 0.95 } }}
               >
                 View Appointments
               </Button>
@@ -1341,7 +1332,7 @@ export default function HomePage() {
                 variant="contained"
                 startIcon={<EventAvailableOutlinedIcon />}
                 onClick={() => { handleCloseScheduled(); navigate('/appointments', { state: { openApptId: scheduledBookingResult?.id } }); }}
-                sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #6a1b9a, #c2185b)', '&:hover': { opacity: 0.95 } }}
+                sx={{ borderRadius: 2, px: 2, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary, color: '#fff', '&:hover': { opacity: 0.95 } }}
               >
                 View Appointment
               </Button>
@@ -1352,7 +1343,7 @@ export default function HomePage() {
                 <Button
                   onClick={handleCloseScheduled}
                   variant="outlined"
-                  sx={{ borderRadius: 30, px: 4, color: '#6a1b9a', borderColor: 'rgba(106,27,154,0.25)', '&:hover': { borderColor: 'rgba(106,27,154,0.4)' } }}
+                  sx={{ borderRadius: 30, px: 4, color: (theme) => theme.palette.custom && theme.palette.custom.deepSlate, borderColor: (theme) => 'rgba(45,84,110,0.12)', '&:hover': { borderColor: (theme) => 'rgba(45,84,110,0.18)' } }}
                 >
                   Close
                 </Button>
@@ -1364,7 +1355,7 @@ export default function HomePage() {
                   variant="contained"
                   startIcon={<EventAvailableOutlinedIcon />}
                   onClick={() => { handleCloseScheduled(); navigate('/appointments'); }}
-                  sx={{ borderRadius: 2, px: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)' }}
+                  sx={{ borderRadius: 2, px: 2, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary, color: '#fff' }}
                 >
                   View Appointments
                 </Button>
@@ -1373,7 +1364,7 @@ export default function HomePage() {
                   variant="contained"
                   disabled={!selectedSlot}
                   onClick={handleScheduledBooking}
-                  sx={{ borderRadius: 2, background: 'linear-gradient(45deg, #833ab4, #fd1d1d)', '&:hover': { background: 'linear-gradient(45deg, #6a2d9f, #c40000)' } }}
+                  sx={{ borderRadius: 2, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary, color: '#fff', '&:hover': { opacity: 0.95 } }}
                 >
                   Confirm Booking
                 </Button>

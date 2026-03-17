@@ -70,7 +70,7 @@ export function LoginModalProvider({ children }) {
           /* ── Mobile centered card ── */
           <Box>
             {/* Gradient accent bar at top */}
-            <Box sx={{ height: 4, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)', borderRadius: '20px 20px 0 0' }} />
+            <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)', borderRadius: '20px 20px 0 0' }} />
             {/* Close button */}
             <Box sx={{ position: 'absolute', right: 8, top: 8, zIndex: 1201 }}>
               <IconButton onClick={closeLogin} size="small" aria-label="Close">
@@ -88,8 +88,8 @@ export function LoginModalProvider({ children }) {
         ) : (
           /* ── Desktop card ── */
           <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-            <Paper elevation={24} sx={{ width: '100%', maxWidth: 420, borderRadius: 4, overflow: 'hidden', p: 0 }}>
-              <Box sx={{ height: 5, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' }} />
+              <Paper elevation={24} sx={{ width: '100%', maxWidth: 420, borderRadius: 4, overflow: 'hidden', p: 0 }}>
+              <Box sx={{ height: 5, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
               {/* Close button */}
               <Box sx={{ position: 'absolute', right: 12, top: 12, zIndex: 1201 }}>
                 <IconButton onClick={closeLogin} size="large" aria-label="Close login dialog">

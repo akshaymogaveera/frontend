@@ -177,11 +177,11 @@ function Navbar() {
                 width: 32,
                 height: 32,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(131,58,180,0.3)',
+                boxShadow: (theme) => `0 2px 8px ${theme.palette.custom ? 'rgba(0,123,255,0.14)' : 'rgba(0,0,0,0.08)'}`,
+                background: (theme) => theme.palette.custom ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)` : 'linear-gradient(135deg,#00C4CC,#007BFF)',
               }}
             >
               <Typography sx={{ color: '#fff', fontWeight: 900, fontSize: 14, lineHeight: 1 }}>
@@ -193,9 +193,7 @@ function Navbar() {
                 fontWeight: 900,
                 fontSize: 22,
                 letterSpacing: -0.5,
-                background: 'linear-gradient(90deg, #833ab4, #fd1d1d)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: 'text.primary',
               }}
             >
               sqip
@@ -213,14 +211,14 @@ function Navbar() {
                   onClick={() => navigate(item.path)}
                   sx={{
                     fontWeight: active ? 700 : 500,
-                    color: active ? 'primary.main' : 'text.secondary',
+                    color: active ? 'text.primary' : 'text.secondary',
                     borderRadius: 3,
                     px: 2,
                     py: 0.75,
-                    background: active ? 'rgba(131,58,180,0.08)' : 'transparent',
+                    background: active ? (theme) => theme.palette.custom ? theme.palette.custom.mint : 'rgba(0,196,204,0.08)' : 'transparent',
                     '&:hover': {
-                      background: 'rgba(131,58,180,0.06)',
-                      color: 'primary.main',
+                      background: (theme) => theme.palette.custom ? theme.palette.custom.mint : 'rgba(0,196,204,0.06)',
+                      color: 'text.primary',
                     },
                   }}
                 >
@@ -259,7 +257,7 @@ function Navbar() {
                     sx={{
                       width: 34,
                       height: 34,
-                      background: 'linear-gradient(135deg, #833ab4, #fd1d1d)',
+                      background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'linear-gradient(135deg,#00C4CC,#007BFF)',
                       fontSize: 14,
                       fontWeight: 700,
                     }}
@@ -324,16 +322,9 @@ function Navbar() {
           ) : (
             <Button
               variant="contained"
+              color="primary"
               onClick={() => openLogin({ from: location.pathname })}
-              sx={{
-                ml: 2,
-                borderRadius: 2,
-                px: 3,
-                background: 'linear-gradient(45deg, #833ab4, #fd1d1d)',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #6a2d9f, #c40000)',
-                },
-              }}
+              sx={{ ml: 2, borderRadius: 2, px: 3 }}
             >
               Login
             </Button>

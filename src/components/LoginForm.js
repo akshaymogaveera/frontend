@@ -366,6 +366,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
       <Button
         fullWidth
         variant="contained"
+        color="primary"
         size={compact ? 'medium' : 'large'}
         onClick={handleRegister}
         disabled={regLoading || !regFirstName || !regPhone}
@@ -376,10 +377,6 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
           mb: compact ? 0.5 : 1,
           borderRadius: 3,
           boxShadow: (t) => t.shadows[6],
-          background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)',
-          color: '#fff',
-          '&:hover': { opacity: 0.92, background: 'linear-gradient(90deg, #833ab4, #fd1d1d, #fcb045)' },
-          '&.Mui-disabled': { opacity: 0.5, color: '#fff' },
         }}
       >
         {regLoading ? <CircularProgress size={20} color="inherit" /> : 'Create Account'}

@@ -1,0 +1,29 @@
+/* Centralized lightweight CSS variables for colors and spacing.
+   This is imported globally in `src/index.js` to provide fallbacks
+   and plain-CSS access to the color tokens outside MUI components. */
+:root {
+  --color-teal: #00C4CC; /* left of CTA gradient */
+  --color-blue: #007BFF; /* right of CTA gradient */
+  --gradient-primary: linear-gradient(90deg, var(--color-teal) 0%, var(--color-blue) 100%);
+  --color-mint-cyan: #E0F7F9; /* active/selected backgrounds */
+  --color-deep-slate: #2D546E; /* headings, brand, nav text */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --text-primary: var(--color-deep-slate);
+  --text-secondary: #6b7b84;
+  --radius-lg: 12px;
+  --radius-md: 8px;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: Inter, "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial;
+}
+
+/* Utility classes (optional) */
+.sqip-cta-gradient {
+  background: var(--gradient-primary);
+  color: #fff;
+}
