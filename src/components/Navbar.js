@@ -45,7 +45,8 @@ function Navbar() {
   const [isAdmin, setIsAdmin] = useState(() => {
     const staff = localStorage.getItem('isStaff') === 'true';
     const groups = JSON.parse(localStorage.getItem('userGroups') || '[]');
-    return staff || groups.length > 0;
+    const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+    return staff || groups.length > 0 || isOrgAdmin;
   });
 
   // Fetch /api/me/ once per mount to refresh admin state
@@ -67,10 +68,13 @@ function Navbar() {
         if (data) {
           localStorage.setItem('isStaff', data.is_staff || data.is_superuser ? 'true' : 'false');
           localStorage.setItem('userGroups', JSON.stringify(data.groups || []));
+          // Persist org-admin flags for frontend admin UX
+          localStorage.setItem('isOrgAdmin', data.is_org_admin ? 'true' : 'false');
+          localStorage.setItem('orgAccess', JSON.stringify(data.org_access || []));
           // persist readable name parts for navbar and other UI
           localStorage.setItem('firstName', data.first_name || '');
           localStorage.setItem('lastName', data.last_name || '');
-          setIsAdmin(data.is_staff || data.is_superuser || (data.groups && data.groups.length > 0));
+          setIsAdmin(data.is_staff || data.is_superuser || (data.groups && data.groups.length > 0) || data.is_org_admin);
           setIsLoggedIn(true);
         }
       })
@@ -84,21 +88,55 @@ function Navbar() {
 
   // Listen for global auth events to update navbar immediately after login/logout
   useEffect(() => {
-    const onLogin = () => {
-      console.debug('[Navbar] sqip:login received, accessToken present:', !!localStorage.getItem('accessToken'));
-      setIsLoggedIn(!!localStorage.getItem('accessToken'));
-      const staff = localStorage.getItem('isStaff') === 'true';
-      const groups = JSON.parse(localStorage.getItem('userGroups') || '[]');
-      setIsAdmin(staff || groups.length > 0);
-      // Ensure any open profile menu is closed when login events occur.
-      setAnchorEl(null);
+    const onLogin = async () => {
+      try {
+        console.debug('[Navbar] sqip:login received, refreshing /api/me');
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+          setIsLoggedIn(false);
+          setIsAdmin(false);
+          return;
+        }
+        const res = await fetch('/api/me/', { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) {
+          localStorage.clear();
+          setIsLoggedIn(false);
+          setIsAdmin(false);
+          setAnchorEl(null);
+          return;
+        }
+        const data = await res.json();
+        localStorage.setItem('isStaff', data.is_staff || data.is_superuser ? 'true' : 'false');
+        localStorage.setItem('userGroups', JSON.stringify(data.groups || []));
+        localStorage.setItem('isOrgAdmin', data.is_org_admin ? 'true' : 'false');
+        localStorage.setItem('orgAccess', JSON.stringify(data.org_access || []));
+        localStorage.setItem('firstName', data.first_name || '');
+        localStorage.setItem('lastName', data.last_name || '');
+        const staff = data.is_staff || data.is_superuser;
+        const groups = data.groups || [];
+        const isOrg = data.is_org_admin;
+        setIsAdmin(staff || groups.length > 0 || isOrg);
+        setIsLoggedIn(true);
+        setAnchorEl(null);
+      } catch (e) {
+        console.debug('[Navbar] onLogin fetch failed', e);
+        // Fallback to reading localStorage
+        const staff = localStorage.getItem('isStaff') === 'true';
+        const groups = JSON.parse(localStorage.getItem('userGroups') || '[]');
+        const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+        setIsAdmin(staff || groups.length > 0 || isOrgAdmin);
+        setIsLoggedIn(!!localStorage.getItem('accessToken'));
+        setAnchorEl(null);
+      }
     };
     const onLogout = () => {
       setIsLoggedIn(false);
       setIsAdmin(false);
       setAnchorEl(null);
     };
-    window.addEventListener('sqip:login', onLogin);
+  window.addEventListener('sqip:login', onLogin);
+  // Also respond to the post-login event some components emit
+  window.addEventListener('sqip:postLogin', onLogin);
     window.addEventListener('sqip:logout', onLogout);
     return () => {
       window.removeEventListener('sqip:login', onLogin);

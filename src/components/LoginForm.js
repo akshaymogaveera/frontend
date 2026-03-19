@@ -126,7 +126,10 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
         const me = await res.json();
         localStorage.setItem('isStaff', me.is_staff || me.is_superuser ? 'true' : 'false');
         localStorage.setItem('userGroups', JSON.stringify(me.groups || []));
-        const isAdmin = me.is_staff || me.is_superuser || (me.groups && me.groups.length > 0);
+        // Persist org-admin flags
+        localStorage.setItem('isOrgAdmin', me.is_org_admin ? 'true' : 'false');
+        localStorage.setItem('orgAccess', JSON.stringify(me.org_access || []));
+  const isAdmin = me.is_staff || me.is_superuser || me.is_org_admin || (me.groups && me.groups.length > 0);
         window.dispatchEvent(new CustomEvent('sqip:login', { detail: { user: me } }));
         window.dispatchEvent(new CustomEvent('sqip:postLogin', {
           detail: { from: redirectFrom, preSelectOrg, preSelectCat },

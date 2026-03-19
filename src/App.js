@@ -90,7 +90,8 @@ function ProtectedRoute({ children }) {
 function AdminRoute({ children }) {
   const isStaff = localStorage.getItem('isStaff') === 'true';
   const groups = JSON.parse(localStorage.getItem('userGroups') || '[]');
-  return isStaff || groups.length > 0 ? children : <Navigate to="/" replace />;
+  const isOrgAdmin = localStorage.getItem('isOrgAdmin') === 'true';
+  return isStaff || groups.length > 0 || isOrgAdmin ? children : <Navigate to="/" replace />;
 }
 
 function App() {
