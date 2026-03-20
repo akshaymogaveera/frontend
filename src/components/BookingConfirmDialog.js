@@ -14,6 +14,7 @@ export default function BookingConfirmDialog({
   onBookAnother,
   onViewAppointments,
   onViewAppointment,
+  preview = null,
 }) {
   return (
     <Dialog
@@ -34,6 +35,12 @@ export default function BookingConfirmDialog({
         {status === null && (
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>You're about to join the queue.</Typography>
+            {preview && preview.count > 0 && (
+              <Box sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>{`There are ${preview.count} people currently waiting.`}</Typography>
+                <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
+              </Box>
+            )}
             {/* caller may render additional details in parent before opening the dialog */}
           </Box>
         )}

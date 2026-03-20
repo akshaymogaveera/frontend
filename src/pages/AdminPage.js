@@ -69,6 +69,8 @@ const COUNTRIES = [
   { code: 'CA', label: 'Canada', dial: '+1', flag: '🇨🇦' },
 ];
 
+const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 const statusConfig = {
   active:   { label: 'Active',      bg: '#e8f5e9', text: '#2e7d32', borderColor: '#4caf50' },
   inactive: { label: 'Inactive',    bg: '#f5f5f5', text: '#616161', borderColor: '#bdbdbd' },
@@ -792,15 +794,21 @@ export default function AdminPage() {
 
   // Create category dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false });
+  const makeEmptyHours = () => {
+    const o = {};
+    DAYS_OF_WEEK.forEach((d) => { o[d] = []; });
+    return o;
+  };
+  const [createForm, setCreateForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
 
   const closeCreateDialog = () => {
     setCreateDialogOpen(false);
-    setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false });
+    setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
     setCreateError('');
     setCreateLoading(false);
+    setCreateDayErrors({});
   };
 
   // Create Category Admin (org-scoped) dialog state
@@ -822,9 +830,208 @@ export default function AdminPage() {
   // Edit category dialog state
   const [editCatDialogOpen, setEditCatDialogOpen] = useState(false);
   const [editCatTarget, setEditCatTarget] = useState(null);
-  const [editCatForm, setEditCatForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false });
+  const [editCatForm, setEditCatForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, opening_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(), break_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })() });
   const [editCatLoading, setEditCatLoading] = useState(false);
   const [editCatError, setEditCatError] = useState('');
+
+  // unscheduled counts per category (for queue size display)
+  const [unscheduledCounts, setUnscheduledCounts] = useState({});
+  // preview of queue shown in the Add-to-queue modal (count + first few users)
+  const [queuePreview, setQueuePreview] = useState({ count: 0, items: [] });
+  // per-day inline validation errors for create/edit forms
+  const [createDayErrors, setCreateDayErrors] = useState({});
+  const [editDayErrors, setEditDayErrors] = useState({});
+  // available slot interval options (minutes) populated from DB (plus sensible defaults)
+  const [intervalOptions, setIntervalOptions] = useState([10, 15, 30, 60, 120]);
+
+  // helpers for opening/break hours validation
+  const timeToMinutes = (t) => {
+    if (!t || typeof t !== 'string') return null;
+    const parts = t.split(':');
+    if (parts.length !== 2) return null;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  };
+
+  // Parse various representations of the category interval into minutes.
+  // Accepts number (minutes), strings like '15', '00:15:00' or '1:00:00', or null.
+  const intervalToMinutes = (v) => {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'number' && Number.isFinite(v)) return Math.floor(v);
+    if (typeof v === 'string') {
+      // pure numeric string
+      if (/^\d+$/.test(v)) return Number(v);
+      // HH:MM:SS or H:MM:SS
+      const parts = v.split(':').map((p) => p.replace(/^0+/, '') === '' ? '0' : p);
+      if (parts.length >= 2) {
+        const h = Number(parts[0]) || 0;
+        const m = Number(parts[1]) || 0;
+        if (!Number.isNaN(h) && !Number.isNaN(m)) return h * 60 + m;
+      }
+      // fallback: try parseInt
+      const n = parseInt(v, 10);
+      if (!Number.isNaN(n)) return n;
+    }
+    return null;
+  };
+
+  const formatIntervalLabel = (m) => {
+    if (!m && m !== 0) return '';
+    if (m >= 60) {
+      if (m % 60 === 0) {
+        const h = m / 60;
+        return h === 1 ? '1 hour' : `${h} hours`;
+      }
+      const h = Math.floor(m / 60);
+      const rem = m % 60;
+      return `${h}h ${rem}m`;
+    }
+    return `${m} minutes`;
+  };
+
+  const validateHours = (opening_hours, break_hours) => {
+    // Return either null for no errors or an object { message, dayErrors }
+    const dayErrors = {};
+    for (const day of DAYS_OF_WEEK) {
+      const opening = opening_hours[day] || [];
+      if (!Array.isArray(opening)) {
+        dayErrors[day] = `Opening hours for ${day} must be an array.`; continue;
+      }
+      if (opening.length === 0) continue; // closed is allowed
+      if (opening.length !== 1) { dayErrors[day] = `Opening hours for ${day} must have one range.`; continue; }
+      const [start, end] = opening[0] || [];
+      const s = timeToMinutes(start);
+      const e = timeToMinutes(end);
+      if (s === null || e === null) { dayErrors[day] = `Invalid opening time format.`; continue; }
+      if (s >= e) { dayErrors[day] = `Start must be earlier than end.`; continue; }
+
+      const breaks = (break_hours && break_hours[day]) || [];
+      for (const br of breaks) {
+        const [bs, be] = br || [];
+        const bsi = timeToMinutes(bs);
+        const bei = timeToMinutes(be);
+        if (bsi === null || bei === null) { dayErrors[day] = `Invalid break time format.`; break; }
+        if (bsi >= bei) { dayErrors[day] = `Break start must be earlier than break end.`; break; }
+        if (!(s <= bsi && bei <= e && bsi < bei)) { dayErrors[day] = `Break must be within opening hours.`; break; }
+        if (bsi === s && bei === e) { dayErrors[day] = `Break cannot fully overlap opening hours.`; break; }
+      }
+    }
+    const hasDays = Object.keys(dayErrors).length > 0;
+    if (hasDays) return { message: 'Please fix the highlighted times.', dayErrors };
+    return null;
+  };
+
+  // Helper: convert 'HH:MM' to 12-hour parts { display: 'h:mm', period: 'AM'|'PM' }
+  const to12Hour = (hhmm) => {
+    if (!hhmm || typeof hhmm !== 'string') return { display: '12:00', period: 'AM' };
+    const parts = hhmm.split(':');
+    if (parts.length !== 2) return { display: '12:00', period: 'AM' };
+    let h = parseInt(parts[0], 10);
+    const m = parts[1];
+    const period = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) h = 12;
+    const display = `${h.toString().padStart(2, '0')}:${m}`;
+    return { display, period };
+  };
+
+  // Helper: convert 12-hour display + period into 'HH:MM' 24-hour string
+  const from12Hour = (display, period) => {
+    if (!display || typeof display !== 'string') return '00:00';
+    const parts = display.split(':');
+    if (parts.length !== 2) return '00:00';
+    let h = parseInt(parts[0], 10);
+    const m = parts[1].padStart(2, '0');
+    if (Number.isNaN(h)) h = 0;
+    if (period === 'AM') {
+      if (h === 12) h = 0;
+    } else {
+      if (h !== 12) h = h + 12;
+    }
+    return `${h.toString().padStart(2, '0')}:${m}`;
+  };
+
+  // Render a nicer composite time input: 12-hour display + AM/PM select
+  function TimeInput({ value24, onChange, label, sx = {} }) {
+    // value24: 'HH:MM'
+    const { display, period } = to12Hour(value24 || '09:00');
+    const [hour, minute] = (display || '09:00').split(':');
+    const [h, setH] = useState(hour.replace(/^0/, '') || '9');
+    const [m, setM] = useState((minute && minute.padStart(2, '0')) || '00');
+    const [per, setPer] = useState(period);
+
+    useEffect(() => {
+      const d = to12Hour(value24 || '09:00');
+      const parts = (d.display || '09:00').split(':');
+      setH(parts[0].replace(/^0/, ''));
+      setM(parts[1]);
+      setPer(d.period);
+    }, [value24]);
+
+    const hours = Array.from({ length: 12 }, (_, i) => `${i + 1}`);
+    const minuteOptions = ['00', '15', '30', '45'];
+
+    const commit = (nh, nm, np) => {
+      const disp = `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+      const next = from12Hour(disp, np);
+      onChange && onChange(next);
+    };
+
+    return (
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ...sx }}>
+        <FormControl size="small" sx={{ minWidth: 56, '& .MuiSelect-select': { px: 1, py: 0.5, textAlign: 'center' }, '& .MuiOutlinedInput-notchedOutline': { borderRadius: 8 } }}>
+          <Select value={String(h)} onChange={(e) => { const v = e.target.value; setH(v); commit(v, m, per); }}>
+            {hours.map((hr) => <MenuItem key={hr} value={hr}>{hr}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 56, '& .MuiSelect-select': { px: 1, py: 0.5, textAlign: 'center' }, '& .MuiOutlinedInput-notchedOutline': { borderRadius: 8 } }}>
+          <Select value={String(m)} onChange={(e) => { const v = e.target.value; setM(v); commit(h, v, per); }}>
+            {minuteOptions.map((mm) => <MenuItem key={mm} value={mm}>{mm}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 64, '& .MuiSelect-select': { px: 1, py: 0.5, textAlign: 'center' }, '& .MuiOutlinedInput-notchedOutline': { borderRadius: 8 } }}>
+          <Select value={per} onChange={(e) => { const v = e.target.value; setPer(v); commit(h, m, v); }}>
+            <MenuItem value="AM">AM</MenuItem>
+            <MenuItem value="PM">PM</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+    );
+  }
+
+  const toggleDayOpenCreate = (day, openFlag) => {
+    setCreateForm((prev) => {
+      const oh = { ...(prev.opening_hours || {}) };
+      const bh = { ...(prev.break_hours || {}) };
+      if (!openFlag) {
+        oh[day] = [];
+        bh[day] = [];
+      } else {
+        oh[day] = [['09:00', '17:00']];
+        bh[day] = [];
+      }
+      return { ...prev, opening_hours: oh, break_hours: bh };
+    });
+    // clear any per-day errors for this day when toggling
+    setCreateDayErrors((prev) => { const next = { ...(prev || {}) }; delete next[day]; return next; });
+  };
+
+  const toggleDayOpenEdit = (day, openFlag) => {
+    setEditCatForm((prev) => {
+      const oh = { ...(prev.opening_hours || {}) };
+      const bh = { ...(prev.break_hours || {}) };
+      if (!openFlag) {
+        oh[day] = [];
+        bh[day] = [];
+      } else {
+        oh[day] = [['09:00', '17:00']];
+        bh[day] = [];
+      }
+      return { ...prev, opening_hours: oh, break_hours: bh };
+    });
+    setEditDayErrors((prev) => { const next = { ...(prev || {}) }; delete next[day]; return next; });
+  };
 
   // Delete confirmation
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -995,6 +1202,18 @@ export default function AdminPage() {
     setCreateError('');
     setCreateLoading(true);
     try {
+      // validate scheduled hours if enabled
+      if (createForm.is_scheduled) {
+        const v = validateHours(createForm.opening_hours || {}, createForm.break_hours || {});
+        if (v) {
+          if (v.dayErrors) setCreateDayErrors(v.dayErrors);
+          setCreateError(v.message || v);
+          setCreateLoading(false);
+          return;
+        } else {
+          setCreateDayErrors({});
+        }
+      }
       const payload = { ...createForm, organization: currentOrg && currentOrg.id };
       const res = await fetch(`${API_BASE}/categories/`, {
         method: 'POST',
@@ -1003,7 +1222,8 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setCreateDialogOpen(false);
-        setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false });
+  setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
+        setCreateDayErrors({});
         setToast({ open: true, msg: 'Category created', severity: 'success' });
         setRefreshCategoriesKey((k) => k + 1);
       } else {
@@ -1041,8 +1261,17 @@ export default function AdminPage() {
 
   const handleOpenEditCat = (cat) => {
     setEditCatTarget(cat);
-    setEditCatForm({ name: cat.name || '', description: cat.description || '', type: cat.type || 'general', is_scheduled: !!cat.is_scheduled });
+    setEditCatForm({
+      name: cat.name || '',
+      description: cat.description || '',
+      type: cat.type || 'general',
+      is_scheduled: !!cat.is_scheduled,
+      time_interval_per_appointment: (intervalToMinutes(cat.time_interval_per_appointment) || 15),
+      opening_hours: cat.opening_hours || (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(),
+      break_hours: cat.break_hours || (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(),
+    });
     setEditCatError('');
+    setEditDayErrors({});
     setEditCatDialogOpen(true);
   };
 
@@ -1050,6 +1279,18 @@ export default function AdminPage() {
     if (!editCatTarget) return;
     setEditCatLoading(true);
     setEditCatError('');
+    // validate scheduled hours if enabled
+    if (editCatForm.is_scheduled) {
+      const v = validateHours(editCatForm.opening_hours || {}, editCatForm.break_hours || {});
+      if (v) {
+        if (v.dayErrors) setEditDayErrors(v.dayErrors);
+        setEditCatError(v.message || v);
+        setEditCatLoading(false);
+        return;
+      } else {
+        setEditDayErrors({});
+      }
+    }
     try {
       const res = await fetch(`${API_BASE}/categories/${editCatTarget.id}/update-info/`, {
         method: 'PATCH',
@@ -1069,6 +1310,7 @@ export default function AdminPage() {
         );
         setEditCatDialogOpen(false);
         setEditCatTarget(null);
+        setEditDayErrors({});
         setToast({ open: true, msg: 'Category updated', severity: 'success' });
       } else {
         const err = await res.json().catch(() => ({}));
@@ -1388,6 +1630,74 @@ export default function AdminPage() {
     return () => { mounted = false; };
   }, [currentOrg, refreshCategoriesKey]);
 
+  // Populate slot-interval options from DB (categories on the selected org), keep sensible defaults
+  useEffect(() => {
+    const defaults = [10, 15, 30, 60, 120];
+    if (!currentOrg) {
+      setIntervalOptions(defaults);
+      return;
+    }
+    const s = new Set(defaults);
+    (currentOrg.categories || []).forEach((c) => {
+      const mins = intervalToMinutes(c && c.time_interval_per_appointment);
+      if (mins && Number.isFinite(mins)) s.add(mins);
+    });
+    const arr = Array.from(s).sort((a, b) => a - b);
+    setIntervalOptions(arr);
+  }, [currentOrg]);
+
+  // Fetch unscheduled queue counts for visible categories so we can show 'N in queue'
+  useEffect(() => {
+    let mounted = true;
+    const fetchCounts = async () => {
+      try {
+        const map = {};
+        for (const c of categories || []) {
+          if (c && !c.is_scheduled) {
+            try {
+              const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${c.id}&status=active&page_size=1`, { headers: authHeaders });
+              if (r.ok) {
+                const d = await r.json();
+                map[c.id] = d.count || 0;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+        if (mounted) setUnscheduledCounts((prev) => ({ ...prev, ...map }));
+      } catch (e) {
+        // ignore
+      }
+    };
+    if (categories && categories.length > 0) fetchCounts();
+    return () => { mounted = false; };
+  }, [categories]);
+
+  // When the Add-to-queue modal opens for a category, fetch a small preview
+  // of the queue (count + first few users) so we can show "N people in front".
+  useEffect(() => {
+    let mounted = true;
+    const fetchPreview = async () => {
+      if (!queueModalOpen || !queueModalCategory) return;
+      try {
+        const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${queueModalCategory.id}&status=active&page_size=5`, { headers: authHeaders });
+        if (!mounted) return;
+        if (r.ok) {
+          const d = await r.json();
+          setQueuePreview({ count: d.count || 0, items: d.results || [] });
+        } else {
+          setQueuePreview({ count: 0, items: [] });
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setQueuePreview({ count: 0, items: [] });
+      }
+    };
+    fetchPreview();
+    return () => { mounted = false; };
+  }, [queueModalOpen, queueModalCategory]);
+
   // If the logged-in user is an org-admin, default the org tab to the first org
   // in their org_access that has categories available in groupedOrgs.
   useEffect(() => {
@@ -1506,7 +1816,7 @@ export default function AdminPage() {
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
                   {currentOrg && canManageOrg(currentOrg.id) && (
                     <>
-                      <Button variant="contained" size="small" onClick={() => { setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false }); setCreateError(''); setCreateDialogOpen(true); }} sx={{ borderRadius: 6, mr: 1 }}>
+                      <Button variant="contained" size="small" onClick={() => { setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() }); setCreateError(''); setCreateDialogOpen(true); }} sx={{ borderRadius: 6, mr: 1 }}>
                         + New Category
                       </Button>
                       {isOrgAdmin && (
@@ -1588,6 +1898,120 @@ export default function AdminPage() {
                       </Select>
                     </FormControl>
                     <FormControlLabel control={<Switch checked={createForm.is_scheduled} onChange={(e) => setCreateForm((f) => ({ ...f, is_scheduled: e.target.checked }))} />} label="Scheduled appointments" />
+                    {createForm.is_scheduled && (
+                      <Box sx={{ mt: 2, mb: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                          <FormControl size="small" sx={{ minWidth: 180 }}>
+                            <InputLabel id="create-interval-label">Slot interval</InputLabel>
+                            <Select
+                              labelId="create-interval-label"
+                              value={createForm.time_interval_per_appointment || 15}
+                              label="Slot interval"
+                              onChange={(e) => setCreateForm((f) => ({ ...f, time_interval_per_appointment: Number(e.target.value) }))}
+                            >
+                              {intervalOptions.map((opt) => (
+                                <MenuItem key={opt} value={opt}>{formatIntervalLabel(opt)}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                        <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>Opening hours</Typography>
+                        <Grid container spacing={1}>
+                          {DAYS_OF_WEEK.map((day) => {
+                            const opening = (createForm.opening_hours && createForm.opening_hours[day]) || [];
+                            const isClosed = !opening || opening.length === 0;
+                            const br = (createForm.break_hours && createForm.break_hours[day]) || [];
+                            return (
+                              <Grid item xs={12} sm={6} key={`open-${day}`}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box sx={{ width: 110 }}><Typography variant="body2">{day}</Typography></Box>
+                                  <FormControlLabel
+                                    control={<Switch size="small" checked={!isClosed} onChange={(e) => toggleDayOpenCreate(day, e.target.checked)} />}
+                                    label={isClosed ? 'Closed' : 'Open'}
+                                  />
+                                </Box>
+                                {!isClosed && (
+                                  <Box sx={{ mt: 1 }}>
+                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>Opening</Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                          <TimeInput
+                                            value24={opening[0] ? opening[0][0] : '09:00'}
+                                            onChange={(val) => {
+                                              setCreateForm((prev) => {
+                                                const oh = { ...(prev.opening_hours || {}) };
+                                                oh[day] = [[val, (oh[day] && oh[day][0] && oh[day][0][1]) || '17:00']];
+                                                return { ...prev, opening_hours: oh };
+                                              });
+                                            }}
+                                          />
+                                          <TimeInput
+                                            value24={opening[0] ? opening[0][1] : '17:00'}
+                                            onChange={(val) => {
+                                              setCreateForm((prev) => {
+                                                const oh = { ...(prev.opening_hours || {}) };
+                                                oh[day] = [[(oh[day] && oh[day][0] && oh[day][0][0]) || '09:00', val]];
+                                                return { ...prev, opening_hours: oh };
+                                              });
+                                            }}
+                                          />
+                                        </Box>
+                                      </Box>
+
+                                      <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
+                                        <Button size="small" variant="text" onClick={() => {
+                                          setCreateForm((prev) => {
+                                            const bh = { ...(prev.break_hours || {}) };
+                                            if (bh[day] && bh[day].length > 0) bh[day] = [];
+                                            else bh[day] = [['13:00','14:00']];
+                                            return { ...prev, break_hours: bh };
+                                          });
+                                        }} sx={{ color: 'primary.main', textTransform: 'none', fontSize: 13 }}>{br && br.length > 0 ? 'Remove break' : 'Add break'}</Button>
+                                      </Box>
+                                    </Box>
+                                  </Box>
+                                )}
+                                {br && br.length > 0 && (
+                                  <Box sx={{ mt: 1 }}>
+                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                        <Typography variant="caption" sx={{ color: 'warning.dark' }}>Break</Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', bgcolor: '#fff7e6', p: 0.5, borderRadius: 1 }}>
+                                          <TimeInput
+                                            value24={br[0][0]}
+                                            onChange={(val) => {
+                                              setCreateForm((prev) => {
+                                                const bh = { ...(prev.break_hours || {}) };
+                                                bh[day] = [[val, (bh[day] && bh[day][0] && bh[day][0][1]) || '14:00']];
+                                                return { ...prev, break_hours: bh };
+                                              });
+                                            }}
+                                          />
+                                          <TimeInput
+                                            value24={br[0][1]}
+                                            onChange={(val) => {
+                                              setCreateForm((prev) => {
+                                                const bh = { ...(prev.break_hours || {}) };
+                                                bh[day] = [[(bh[day] && bh[day][0] && bh[day][0][0]) || '13:00', val]];
+                                                return { ...prev, break_hours: bh };
+                                              });
+                                            }}
+                                          />
+                                        </Box>
+                                      </Box>
+                                    </Box>
+                                  </Box>
+                                )}
+                                {createDayErrors && createDayErrors[day] && (
+                                  <FormHelperText error sx={{ mt: 0.5 }}>{createDayErrors[day]}</FormHelperText>
+                                )}
+                              </Grid>
+                            );
+                          })}
+                        </Grid>
+                      </Box>
+                    )}
                   </DialogContent>
                   <DialogActions>
                     <Button onClick={closeCreateDialog}>Cancel</Button>
@@ -1758,6 +2182,122 @@ export default function AdminPage() {
                             label="Scheduled appointments"
                           />
                         </Grid>
+                        {editCatForm.is_scheduled && (
+                          <Grid item xs={12}>
+                            <Box sx={{ mt: 2, mb: 1 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                                <FormControl size="small" sx={{ minWidth: 180 }}>
+                                  <InputLabel id="edit-interval-label">Slot interval</InputLabel>
+                                  <Select
+                                    labelId="edit-interval-label"
+                                    value={editCatForm.time_interval_per_appointment || 15}
+                                    label="Slot interval"
+                                    onChange={(e) => setEditCatForm((f) => ({ ...f, time_interval_per_appointment: Number(e.target.value) }))}
+                                  >
+                                      {intervalOptions.map((opt) => (
+                                        <MenuItem key={opt} value={opt}>{formatIntervalLabel(opt)}</MenuItem>
+                                      ))}
+                                  </Select>
+                                </FormControl>
+                              </Box>
+                              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>Opening hours</Typography>
+                              <Grid container spacing={1}>
+                                {DAYS_OF_WEEK.map((day) => {
+                                  const opening = (editCatForm.opening_hours && editCatForm.opening_hours[day]) || [];
+                                  const isClosed = !opening || opening.length === 0;
+                                  const br = (editCatForm.break_hours && editCatForm.break_hours[day]) || [];
+                                  return (
+                                    <Grid item xs={12} sm={6} key={`edit-open-${day}`}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <Box sx={{ width: 110 }}><Typography variant="body2">{day}</Typography></Box>
+                                        <FormControlLabel
+                                          control={<Switch size="small" checked={!isClosed} onChange={(e) => toggleDayOpenEdit(day, e.target.checked)} />}
+                                          label={isClosed ? 'Closed' : 'Open'}
+                                        />
+                                      </Box>
+                                      {!isClosed && (
+                                        <Box sx={{ mt: 1 }}>
+                                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>Opening</Typography>
+                                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                                <TimeInput
+                                                  value24={opening[0] ? opening[0][0] : '09:00'}
+                                                  onChange={(val) => {
+                                                    setEditCatForm((prev) => {
+                                                      const oh = { ...(prev.opening_hours || {}) };
+                                                      oh[day] = [[val, (oh[day] && oh[day][0] && oh[day][0][1]) || '17:00']];
+                                                      return { ...prev, opening_hours: oh };
+                                                    });
+                                                  }}
+                                                />
+                                                <TimeInput
+                                                  value24={opening[0] ? opening[0][1] : '17:00'}
+                                                  onChange={(val) => {
+                                                    setEditCatForm((prev) => {
+                                                      const oh = { ...(prev.opening_hours || {}) };
+                                                      oh[day] = [[(oh[day] && oh[day][0] && oh[day][0][0]) || '09:00', val]];
+                                                      return { ...prev, opening_hours: oh };
+                                                    });
+                                                  }}
+                                                />
+                                              </Box>
+                                            </Box>
+
+                                            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
+                                              <Button size="small" variant="text" onClick={() => {
+                                                setEditCatForm((prev) => {
+                                                  const bh = { ...(prev.break_hours || {}) };
+                                                  if (bh[day] && bh[day].length > 0) bh[day] = [];
+                                                  else bh[day] = [['13:00','14:00']];
+                                                  return { ...prev, break_hours: bh };
+                                                });
+                                              }} sx={{ color: 'primary.main', textTransform: 'none', fontSize: 13 }}>{br && br.length > 0 ? 'Remove break' : 'Add break'}</Button>
+                                            </Box>
+                                          </Box>
+                                        </Box>
+                                      )}
+                                      {br && br.length > 0 && (
+                                        <Box sx={{ mt: 1 }}>
+                                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                              <Typography variant="caption" sx={{ color: 'warning.dark' }}>Break</Typography>
+                                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', bgcolor: '#fff7e6', p: 0.5, borderRadius: 1 }}>
+                                                <TimeInput
+                                                  value24={br[0][0]}
+                                                  onChange={(val) => {
+                                                    setEditCatForm((prev) => {
+                                                      const bh = { ...(prev.break_hours || {}) };
+                                                      bh[day] = [[val, (bh[day] && bh[day][0] && bh[day][0][1]) || '14:00']];
+                                                      return { ...prev, break_hours: bh };
+                                                    });
+                                                  }}
+                                                />
+                                                <TimeInput
+                                                  value24={br[0][1]}
+                                                  onChange={(val) => {
+                                                    setEditCatForm((prev) => {
+                                                      const bh = { ...(prev.break_hours || {}) };
+                                                      bh[day] = [[(bh[day] && bh[day][0] && bh[day][0][0]) || '13:00', val]];
+                                                      return { ...prev, break_hours: bh };
+                                                    });
+                                                  }}
+                                                />
+                                              </Box>
+                                            </Box>
+                                          </Box>
+                                        </Box>
+                                      )}
+                                      {editDayErrors && editDayErrors[day] && (
+                                        <FormHelperText error sx={{ mt: 0.5 }}>{editDayErrors[day]}</FormHelperText>
+                                      )}
+                                    </Grid>
+                                  );
+                                })}
+                              </Grid>
+                            </Box>
+                          </Grid>
+                        )}
                       </Grid>
                     </Box>
                   </DialogContent>
@@ -1923,7 +2463,7 @@ export default function AdminPage() {
                             }}
                             sx={{ ml: 1 }}
                           >
-                            Add to queue
+                            {`Add to queue${unscheduledCounts[currentCategory.id] ? ` (${unscheduledCounts[currentCategory.id]} waiting)` : ''}`}
                           </Button>
                         )}
 
@@ -2078,6 +2618,12 @@ export default function AdminPage() {
         <DialogTitle>Add user to queue — {queueModalCategory ? (queueModalCategory.name || `Category #${queueModalCategory.id}`) : ''}</DialogTitle>
         <DialogContent>
           {queueError && <Alert severity="error" sx={{ mb: 2 }}>{queueError}</Alert>}
+          {queuePreview && queuePreview.count > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{`There are ${queuePreview.count} people currently waiting.`}</Typography>
+              <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
+            </Box>
+          )}
           <Box component="form" sx={{ mt: 1 }}>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -2155,7 +2701,7 @@ export default function AdminPage() {
               '&:hover': { opacity: 0.95 },
             }}
           >
-            {queueLoading ? <CircularProgress size={18} color="inherit" /> : 'Add to queue'}
+            {queueLoading ? <CircularProgress size={18} color="inherit" /> : (`Add to queue${queuePreview && queuePreview.count ? ` (you'll be #${queuePreview.count + 1})` : ''}`)}
           </Button>
         </DialogActions>
       </Dialog>

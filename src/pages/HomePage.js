@@ -281,6 +281,7 @@ export default function HomePage() {
   const [bookingResult, setBookingResult] = useState(null);
   const [bookingError, setBookingError] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmPreview, setConfirmPreview] = useState({ count: 0, items: [] });
   // Scheduled appointment state
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
@@ -573,6 +574,30 @@ export default function HomePage() {
       setBookingStatus('error');
     }
   };
+
+  // When the confirm dialog for a walk-in opens, fetch a small preview of the current queue
+  useEffect(() => {
+    let mounted = true;
+    const fetchPreview = async () => {
+      if (!confirmOpen || !selectedCategory || selectedCategory.is_scheduled) return;
+      try {
+        const hdrs = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+        const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${selectedCategory.id}&status=active&page_size=5`, { headers: hdrs });
+        if (!mounted) return;
+        if (r.ok) {
+          const d = await r.json();
+          setConfirmPreview({ count: d.count || 0, items: d.results || [] });
+        } else {
+          setConfirmPreview({ count: 0, items: [] });
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setConfirmPreview({ count: 0, items: [] });
+      }
+    };
+    fetchPreview();
+    return () => { mounted = false; };
+  }, [confirmOpen, selectedCategory, token]);
 
   // Debounced live search when user types
   useEffect(() => {
@@ -1384,6 +1409,7 @@ export default function HomePage() {
         onBookAnother={handleCloseConfirm}
         onViewAppointments={() => { handleCloseConfirm(); navigate('/appointments'); }}
         onViewAppointment={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
+          preview={confirmPreview}
       />
     </Box>
   );

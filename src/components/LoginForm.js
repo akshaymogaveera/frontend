@@ -134,15 +134,21 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
         window.dispatchEvent(new CustomEvent('sqip:postLogin', {
           detail: { from: redirectFrom, preSelectOrg, preSelectCat },
         }));
+        // If the login was triggered to go to a specific organization/category (booking flow), honor that.
         if (preSelectOrg && preSelectCat) {
           if (onClose) onClose();
           navigate('/', { state: { preSelectOrg, preSelectCat }, replace: true });
+        // Otherwise, if the user is an admin (staff, superuser, org-admin or group-based admin),
+        // send them to the Admin area regardless of redirectFrom so they land on the Admin tab.
+        } else if (isAdmin) {
+          if (onClose) onClose();
+          navigate('/admin', { replace: true });
         } else if (redirectFrom && redirectFrom !== '/login') {
           if (onClose) onClose();
           navigate(redirectFrom, { replace: true });
         } else {
           if (onClose) onClose();
-          navigate(isAdmin ? '/admin' : '/', { replace: true });
+          navigate('/', { replace: true });
         }
       } else {
         if (onClose) onClose();

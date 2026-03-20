@@ -96,6 +96,7 @@ function CategoryCard({ cat, onSelect }) {
 function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState({ count: 0, items: [] });
 
   const token = localStorage.getItem('accessToken');
 
@@ -140,6 +141,30 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
     setLoading(false);
   };
 
+  // Fetch a small preview of the current unscheduled queue when dialog opens
+  useEffect(() => {
+    let mounted = true;
+    const fetchPreview = async () => {
+      if (!open || !category) return;
+      try {
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${category.id}&status=active&page_size=5`, { headers });
+        if (!mounted) return;
+        if (r.ok) {
+          const d = await r.json();
+          setPreview({ count: d.count || 0, items: d.results || [] });
+        } else {
+          setPreview({ count: 0, items: [] });
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setPreview({ count: 0, items: [] });
+      }
+    };
+    fetchPreview();
+    return () => { mounted = false; };
+  }, [open, category]);
+
   return (
     <Dialog open={open} onClose={() => !loading && onClose()} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}>
       <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
@@ -148,6 +173,12 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
         <Button size="small" onClick={() => !loading && onClose()} sx={{ color: 'text.secondary' }} startIcon={<CloseIcon />}>Close</Button>
       </DialogTitle>
       <DialogContent>
+        {preview && preview.count > 0 && (
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>{`There are ${preview.count} people currently waiting.`}</Typography>
+            <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
+          </Box>
+        )}
         <Typography variant="body2" color="text.secondary">You are joining the walk-in queue for <strong>{category?.name || category?.description}</strong>.</Typography>
         {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
       </DialogContent>
