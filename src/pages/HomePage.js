@@ -292,6 +292,9 @@ export default function HomePage() {
   const [scheduledBookingStatus, setScheduledBookingStatus] = useState(null);
   const [scheduledBookingResult, setScheduledBookingResult] = useState(null);
   const [scheduledBookingError, setScheduledBookingError] = useState('');
+  const [scheduledCountForDate, setScheduledCountForDate] = useState(null);
+  const [scheduledLimit, setScheduledLimit] = useState(null);
+  const [scheduledLimitMsg, setScheduledLimitMsg] = useState('');
 
   const token = localStorage.getItem('accessToken');
   const userId = localStorage.getItem('userId');
@@ -582,11 +585,11 @@ export default function HomePage() {
       if (!confirmOpen || !selectedCategory || selectedCategory.is_scheduled) return;
       try {
         const hdrs = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-        const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${selectedCategory.id}&status=active&page_size=5`, { headers: hdrs });
+        const r = await fetch(`${API_BASE}/appointments/unscheduled-count/?category_id=${selectedCategory.id}&status=active`, { headers: hdrs });
         if (!mounted) return;
         if (r.ok) {
           const d = await r.json();
-          setConfirmPreview({ count: d.count || 0, items: d.results || [] });
+          setConfirmPreview({ count: d.count || 0, items: [] });
         } else {
           setConfirmPreview({ count: 0, items: [] });
         }
@@ -673,8 +676,14 @@ export default function HomePage() {
     return `${yyyy}-${mm}-${dd}`;
   })();
 
-  const dateInputRef = useRef(null);
   const [effectiveMaxDate, setEffectiveMaxDate] = useState(maxDate);
+
+  // Calendar dialog state — declared here so handleDateChange (below) can reference setCalendarOpen
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
 
   const handleDateChange = useCallback(async (dateStr) => {
     setSelectedDate(dateStr);
@@ -731,18 +740,39 @@ export default function HomePage() {
           setSlotsError('No bookable slots for this date. Please choose another date.');
           // Clear the visible selection so the user cannot proceed with this date.
           setSelectedDate('');
-          // Try to re-open the native picker to prompt the user to choose another date.
-          try {
-            const el = dateInputRef.current;
-            if (el) {
-              if (typeof el.showPicker === 'function') el.showPicker();
-              else el.focus();
-            }
-          } catch (e) {
-            // ignore
-          }
+          // clear per-date scheduled counters
+          setScheduledCountForDate(null);
+          setScheduledLimit(null);
+          setScheduledLimitMsg('');
+          // Re-open the React calendar so the user can pick another date.
+          setCalendarOpen(true);
         } else {
           setSlots(normalized);
+          // Fetch user's scheduled count and category limit for this date so we can
+          // proactively disable the Confirm button if the limit is reached.
+          (async () => {
+            try {
+              const scRes = await fetch(`${API_BASE}/appointments/scheduled-count/?date=${dateStr}&category_id=${selectedCategory.id}`, { headers: authHeaders });
+              if (scRes.ok) {
+                const scData = await scRes.json();
+                setScheduledCountForDate(typeof scData.count === 'number' ? scData.count : 0);
+                setScheduledLimit(scData.limit == null ? null : scData.limit);
+                if (scData.limit != null && scData.count >= scData.limit) {
+                  setScheduledLimitMsg(`You already have ${scData.count} scheduled appointment(s) on this date; the limit is ${scData.limit} per day.`);
+                } else {
+                  setScheduledLimitMsg('');
+                }
+              } else {
+                setScheduledCountForDate(null);
+                setScheduledLimit(null);
+                setScheduledLimitMsg('');
+              }
+            } catch (err) {
+              setScheduledCountForDate(null);
+              setScheduledLimit(null);
+              setScheduledLimitMsg('');
+            }
+          })();
           if (normalized.length === 0) setSlotsError('No available slots for this date.');
         }
       } else {
@@ -812,6 +842,61 @@ export default function HomePage() {
 
     return () => { mounted = false; };
   }, [scheduledOpen, selectedCategory, localTodayStr, maxDate, token, effectiveMaxDate]);
+
+  const openCalendar = () => {
+    setCalendarMonth((_prev) => {
+      if (selectedDate) return new Date(new Date(selectedDate + 'T00:00:00').getFullYear(), new Date(selectedDate + 'T00:00:00').getMonth(), 1);
+      return new Date();
+    });
+    setCalendarOpen(true);
+  };
+
+  const clampDateStr = (dateStr) => {
+    if (!dateStr) return '';
+    if (dateStr < localTodayStr) return localTodayStr;
+    if (dateStr > effectiveMaxDate) return effectiveMaxDate;
+    return dateStr;
+  };
+
+  const selectDateFromCalendar = (dateStr) => {
+    const clamped = clampDateStr(dateStr);
+    handleDateChange(clamped);
+    setCalendarOpen(false);
+  };
+
+  // Helpers to render a simple month grid
+  const getMonthMatrix = (d) => {
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const first = new Date(year, month, 1);
+    const startDay = first.getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const weeks = [];
+    let week = new Array(7).fill(null);
+    let day = 1;
+    // Fill first week
+    for (let i = startDay; i < 7; i++) {
+      week[i] = new Date(year, month, day++);
+    }
+    weeks.push(week);
+    while (day <= daysInMonth) {
+      week = new Array(7).fill(null);
+      for (let i = 0; i < 7 && day <= daysInMonth; i++) {
+        week[i] = new Date(year, month, day++);
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  };
+
+  const isDisabledDate = (d) => {
+    if (!d) return true;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const s = `${yyyy}-${mm}-${dd}`;
+    return s < localTodayStr || s > effectiveMaxDate;
+  };
   // We removed the separate quick-check fetch; the backward search above will
   // still attempt to find the nearest earlier bookable day if needed.
 
@@ -1151,7 +1236,7 @@ export default function HomePage() {
           </IconButton>
         </DialogTitle>
 
-        <DialogContent sx={{ pt: 2 }}>
+        <DialogContent sx={{ pt: { xs: 1, sm: 2 } }}>
           {scheduledBookingStatus === 'success' && scheduledBookingResult ? (
             <Box sx={{ textAlign: 'center', py: 1 }}>
               <CheckCircleOutlineIcon sx={{ fontSize: 56, color: 'success.main', mb: 1 }} />
@@ -1192,39 +1277,27 @@ export default function HomePage() {
                     Timezone: {selectedCategory.time_zone}
                   </Typography>
                 )}
+                {selectedCategory?.max_scheduled_per_user_per_day != null && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    Only {selectedCategory.max_scheduled_per_user_per_day} appointment{selectedCategory.max_scheduled_per_user_per_day > 1 ? 's' : ''} allowed per user per day
+                  </Typography>
+                )}
               </Box>
 
               {/* Date picker */}
               <Typography variant="subtitle2" fontWeight={700} gutterBottom>
                 1. Pick a date
               </Typography>
-              <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-                {/* Hidden native date input used to open platform picker. We keep it invisible so users can't type arbitrary dates. */}
-                <input
-                  ref={dateInputRef}
-                  type="date"
-                  value={selectedDate}
-                  min={localTodayStr}
-                  max={effectiveMaxDate}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
-                />
-
+              <Box sx={{ mb: { xs: 0.5, sm: 3 }, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {/* Single button on all platforms — opens the React calendar dialog */}
                 <Button
                   variant="outlined"
-                  onClick={() => {
-                    // Try showPicker if supported, otherwise focus/click the input
-                    const el = dateInputRef.current;
-                    if (!el) return;
-                    if (typeof el.showPicker === 'function') el.showPicker();
-                    else el.focus();
-                  }}
                   startIcon={<CalendarTodayOutlinedIcon />}
+                  onClick={openCalendar}
                   sx={{ borderRadius: 2, textTransform: 'none', justifyContent: 'center', px: 3, width: '100%' }}
                 >
                   {selectedDate ? formatDate(selectedDate) : 'Pick a date'}
                 </Button>
-                {/* Latest selectable date is enforced by the hidden input's max */}
               </Box>
 
               {/* Slots grid */}
@@ -1242,9 +1315,12 @@ export default function HomePage() {
                     </Box>
                   )}
 
-                  {slotsError && !loadingSlots && (
-                    <Alert severity="info" sx={{ borderRadius: 2, mb: 2 }}>{slotsError}</Alert>
-                  )}
+                      {slotsError && !loadingSlots && (
+                        <Alert severity="info" sx={{ borderRadius: 2, mb: 2 }}>{slotsError}</Alert>
+                      )}
+                      {scheduledLimitMsg && !loadingSlots && (
+                        <Alert severity="error" sx={{ borderRadius: 2, mt: 1, mb: 1 }}>{scheduledLimitMsg}</Alert>
+                      )}
 
                   {!loadingSlots && slots.length > 0 && (
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
@@ -1321,6 +1397,75 @@ export default function HomePage() {
                 </>
               )}
 
+      {/* React calendar dialog — same on all platforms */}
+      <Dialog open={calendarOpen} onClose={() => setCalendarOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3, m: 2 } }}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button size="small" onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))} sx={{ minWidth: 32, px: 0.5 }}>‹</Button>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ minWidth: 160, textAlign: 'center' }}>
+              {calendarMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
+            </Typography>
+            <Button size="small" onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))} sx={{ minWidth: 32, px: 0.5 }}>›</Button>
+          </Box>
+          <IconButton size="small" onClick={() => setCalendarOpen(false)}><CloseIcon fontSize="small" /></IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1, pb: 2, px: 1.5 }}>
+          {/* Use a full-width table so each of the 7 columns is exactly 1/7 of the width — no overflow on any screen size */}
+          <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <Box component="thead">
+              <Box component="tr">
+                {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d) => (
+                  <Box component="th" key={d} sx={{ width: '14.28%', textAlign: 'center', pb: 1, fontWeight: 700, color: 'text.secondary', fontSize: 12, fontFamily: 'inherit' }}>{d}</Box>
+                ))}
+              </Box>
+            </Box>
+            <Box component="tbody">
+              {getMonthMatrix(calendarMonth).map((week, wi) => (
+                <Box component="tr" key={wi}>
+                  {week.map((dt, di) => {
+                    if (!dt) return <Box component="td" key={di} />;
+                    const disabled = isDisabledDate(dt);
+                    const dateStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+                    const isSelected = selectedDate === dateStr;
+                    const isToday = dateStr === localTodayStr;
+                    return (
+                      <Box component="td" key={di} sx={{ textAlign: 'center', p: '2px 0' }}>
+                        <Box
+                          component={disabled ? 'span' : 'button'}
+                          onClick={disabled ? undefined : () => selectDateFromCalendar(dateStr)}
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 36,
+                            height: 36,
+                            borderRadius: '50%',
+                            border: isToday && !isSelected ? '2px solid' : 'none',
+                            borderColor: 'primary.main',
+                            bgcolor: isSelected ? 'primary.main' : isToday ? 'rgba(0,196,204,0.10)' : 'transparent',
+                            color: isSelected ? '#fff' : disabled ? 'text.disabled' : 'text.primary',
+                            fontWeight: isSelected || isToday ? 700 : 400,
+                            fontSize: 13,
+                            fontFamily: 'inherit',
+                            cursor: disabled ? 'default' : 'pointer',
+                            outline: 'none',
+                            WebkitTapHighlightColor: 'transparent',
+                            transition: 'background 0.15s',
+                            '&:hover': disabled ? {} : { bgcolor: isSelected ? 'primary.dark' : 'action.hover' },
+                          }}
+                        >
+                          {dt.getDate()}
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
               {scheduledBookingStatus === 'error' && (
                 <Alert severity="error" sx={{ borderRadius: 2, mt: 2 }}>{scheduledBookingError}</Alert>
               )}
@@ -1341,7 +1486,7 @@ export default function HomePage() {
           )}
         </DialogContent>
 
-  <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', '& .MuiButton-root': { minWidth: 120, flex: '1 1 auto', whiteSpace: 'normal', textTransform: 'none' }, '@media (max-width:600px)': { '& .MuiButton-root': { flexBasis: '100%' } } }}>
+  <DialogActions sx={{ px: { xs: 2, sm: 3 }, pb: { xs: 1.25, sm: 3 }, pt: { xs: 0.25, sm: 1 }, gap: 1, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', '& .MuiButton-root': { minWidth: 120, flex: '1 1 auto', whiteSpace: 'normal', textTransform: 'none' }, '@media (max-width:600px)': { '& .MuiButton-root': { flexBasis: '100%' } } }}>
           {scheduledBookingStatus === 'success' ? (
             <>
               <Button onClick={handleCloseScheduled} variant="outlined" sx={{ borderRadius: 2, px: 2 }}>Book Another</Button>
@@ -1387,7 +1532,7 @@ export default function HomePage() {
               ) : (
                 <Button
                   variant="contained"
-                  disabled={!selectedSlot}
+                  disabled={!selectedSlot || (scheduledLimit != null && scheduledCountForDate != null && scheduledCountForDate >= scheduledLimit)}
                   onClick={handleScheduledBooking}
                   sx={{ borderRadius: 2, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary, color: '#fff', '&:hover': { opacity: 0.95 } }}
                 >

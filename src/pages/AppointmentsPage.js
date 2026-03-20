@@ -145,7 +145,7 @@ function AppointmentRow({ appt, onClick }) {
   );
 }
 
-function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
+function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, refreshLoading }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -188,6 +188,13 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel }) {
               size="small"
               sx={{ bgcolor: 'rgba(255,255,255,0.25)', color: (theme) => theme.palette.custom.deepSlate, fontWeight: 700, fontSize: 12, textShadow: '0 1px 0 rgba(255,255,255,0.06)' }}
             />
+            <Tooltip title="Refresh appointment">
+              <span>
+                <IconButton onClick={() => onRefresh && onRefresh(appt && appt.id)} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate }} disabled={refreshLoading}>
+                  {refreshLoading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
+                </IconButton>
+              </span>
+            </Tooltip>
             <IconButton onClick={onClose} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate }}>
               <CloseIcon />
             </IconButton>
@@ -382,6 +389,7 @@ export default function AppointmentsPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [refreshLoading, setRefreshLoading] = useState(false);
 
   const token = localStorage.getItem('accessToken');
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -473,6 +481,33 @@ export default function AppointmentsPage() {
       setCancelError('Network error.');
     }
     setCancelling(false);
+  };
+
+  const handleRefreshAppointment = async (id) => {
+    if (!id) return;
+    setRefreshLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/appointments/${id}/`, { headers: authHeaders });
+      if (res.ok) {
+        const ap = await res.json();
+        setSelected(ap);
+        // also update appointments list if present
+        setAppointments((prev) => {
+          if (!Array.isArray(prev)) return prev;
+          const idx = prev.findIndex((a) => String(a.id) === String(ap.id));
+          if (idx === -1) return prev;
+          const copy = prev.slice();
+          copy[idx] = ap;
+          return copy;
+        });
+      } else if (res.status === 401) {
+        localStorage.clear();
+        navigate('/');
+      }
+    } catch (e) {
+      // ignore network errors here — user can retry
+    }
+    setRefreshLoading(false);
   };
 
   // Stats
@@ -715,6 +750,8 @@ export default function AppointmentsPage() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onCancel={(appt) => { setCancelTarget(appt); setCancelError(''); }}
+        onRefresh={handleRefreshAppointment}
+        refreshLoading={refreshLoading}
       />
 
       {/* Cancel dialog */}

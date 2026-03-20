@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
+  TextField,
   Card,
   CardContent,
   CardActionArea,
@@ -148,11 +149,11 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
       if (!open || !category) return;
       try {
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${category.id}&status=active&page_size=5`, { headers });
+        const r = await fetch(`${API_BASE}/appointments/unscheduled-count/?category_id=${category.id}&status=active`, { headers });
         if (!mounted) return;
         if (r.ok) {
           const d = await r.json();
-          setPreview({ count: d.count || 0, items: d.results || [] });
+          setPreview({ count: d.count || 0, items: [] });
         } else {
           setPreview({ count: 0, items: [] });
         }
@@ -263,12 +264,11 @@ export default function OrgBookingPage() {
       const preOrg = detail.preSelectOrg;
       const preCat = detail.preSelectCat;
       if (preOrg && preCat && String(preOrg.id) === String(orgId)) {
+        // Keep the user on the org/category page. For scheduled categories we
+        // previously redirected to the home page to reuse the booking dialog.
+        // That changes the user's context; instead, stay on this page and mark
+        // the category as selected so the UI can open a booking flow here.
         setSelectedCat(preCat);
-        if (preCat.is_scheduled) {
-          navigate('/', { state: { preSelectOrg: preOrg, preSelectCat: preCat } });
-        } else {
-          setSelectedCat(preCat);
-        }
       }
     };
     window.addEventListener('sqip:postLogin', handler);
@@ -280,11 +280,9 @@ export default function OrgBookingPage() {
       openLogin({ from: `/org/${orgId}/category/${cat.id}`, preSelectOrg: org, preSelectCat: cat });
       return;
     }
-    if (cat.is_scheduled) {
-      navigate('/', { state: { preSelectOrg: org, preSelectCat: cat } });
-    } else {
-      setSelectedCat(cat);
-    }
+    // Stay on this page for scheduled categories as well; mark the category
+    // selected so a scheduling flow can be presented in-place (no redirect).
+    setSelectedCat(cat);
   };
 
   const handleBookSuccess = (appt) => {
@@ -301,6 +299,119 @@ export default function OrgBookingPage() {
     setCreatedApptError(errorMsg || 'Booking failed.');
     setCreatedApptErrorOpen(true);
   };
+
+  // Lightweight scheduled booking dialog for scheduled categories so users
+  // can book without leaving the org/category page.
+  function ScheduledDialog({ open, onClose, category, orgId, onSuccess, onError }) {
+    const [date, setDate] = useState('');
+    const [slots, setSlots] = useState([]);
+    const [loadingSlots, setLoadingSlots] = useState(false);
+    const [selectedSlot, setSelectedSlot] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const token = localStorage.getItem('accessToken');
+    const userId = localStorage.getItem('userId');
+
+    useEffect(() => {
+      if (!open) return;
+      // default date to today in YYYY-MM-DD
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const today = `${yyyy}-${mm}-${dd}`;
+      setDate(today);
+      setSelectedSlot(null);
+    }, [open]);
+
+    useEffect(() => {
+      let mounted = true;
+      if (!open || !date || !category) return;
+      (async () => {
+        setLoadingSlots(true);
+        setSlots([]);
+        try {
+          const res = await fetch(`${API_BASE}/appointments/availability/?date=${date}&category_id=${category.id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (!mounted) return;
+          if (res.ok) {
+            const data = await res.json();
+            const rawSlots = Array.isArray(data) ? data : (data.slots || []);
+            const normalized = rawSlots.map((entry) => {
+              const timeRange = entry[0];
+              const available = entry[1];
+              const startTime = Array.isArray(timeRange) ? timeRange[0] : timeRange;
+              const isoStart = `${date}T${startTime}:00`;
+              return [isoStart, Boolean(available)];
+            });
+            setSlots(normalized);
+          } else {
+            setSlots([]);
+          }
+        } catch (e) {
+          setSlots([]);
+        }
+        setLoadingSlots(false);
+      })();
+      return () => { mounted = false; };
+    }, [open, date, category, token]);
+
+    const handleConfirm = async () => {
+      if (!selectedSlot) return;
+      setLoading(true);
+      setError('');
+      try {
+        const payload = { organization: Number(orgId), category: category.id, user: Number(userId), scheduled_time: selectedSlot };
+        const res = await fetch(`${API_BASE}/appointments/schedule/`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          onClose();
+          if (onSuccess) onSuccess(data);
+        } else {
+          const d = await res.json();
+          let msg = 'Booking failed.';
+          if (d.detail) msg = d.detail;
+          else if (d.errors) msg = typeof d.errors === 'string' ? d.errors : JSON.stringify(d.errors);
+          setError(msg);
+          if (onError) onError(msg);
+        }
+      } catch (e) {
+        setError('Network error.');
+        if (onError) onError('Network error.');
+      }
+      setLoading(false);
+    };
+
+    return (
+      <Dialog open={open} onClose={() => !loading && onClose()} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+        <DialogTitle sx={{ fontWeight: 700 }}>Schedule an Appointment</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="body2" fontWeight={700}>{category?.name}</Typography>
+            <Typography variant="caption" color="text.secondary">Pick a date and time</Typography>
+          </Box>
+          <TextField type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth sx={{ mb: 2 }} />
+          {loadingSlots ? <CircularProgress /> : (
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {slots.map(([iso, available]) => (
+                <Button key={iso} variant={selectedSlot === iso ? 'contained' : 'outlined'} disabled={!available} onClick={() => setSelectedSlot(iso)} sx={{ borderRadius: 2 }}>{iso.split('T')[1].slice(0,5)}</Button>
+              ))}
+              {slots.length === 0 && <Typography variant="body2" color="text.secondary">No slots available for this date.</Typography>}
+            </Box>
+          )}
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => { onClose(); setSelectedSlot(null); }} variant="outlined" disabled={loading}>Cancel</Button>
+          <Button onClick={handleConfirm} variant="contained" disabled={!selectedSlot || loading} startIcon={loading ? <CircularProgress size={16} /> : null}>Confirm</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
 
   if (loading) return (<Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>);
   if (error) return (
@@ -345,6 +456,17 @@ export default function OrgBookingPage() {
 
       {selectedCat && !selectedCat.is_scheduled && (
         <WalkInDialog
+          open={Boolean(selectedCat)}
+          onClose={() => setSelectedCat(null)}
+          category={selectedCat}
+          orgId={Number(orgId)}
+          onSuccess={handleBookSuccess}
+          onError={handleBookError}
+        />
+      )}
+
+      {selectedCat && selectedCat.is_scheduled && (
+        <ScheduledDialog
           open={Boolean(selectedCat)}
           onClose={() => setSelectedCat(null)}
           category={selectedCat}

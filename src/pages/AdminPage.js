@@ -1655,7 +1655,7 @@ export default function AdminPage() {
         for (const c of categories || []) {
           if (c && !c.is_scheduled) {
             try {
-              const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${c.id}&status=active&page_size=1`, { headers: authHeaders });
+              const r = await fetch(`${API_BASE}/appointments/unscheduled-count/?category_id=${c.id}&status=active`, { headers: authHeaders });
               if (r.ok) {
                 const d = await r.json();
                 map[c.id] = d.count || 0;
@@ -1680,12 +1680,12 @@ export default function AdminPage() {
     let mounted = true;
     const fetchPreview = async () => {
       if (!queueModalOpen || !queueModalCategory) return;
-      try {
-        const r = await fetch(`${API_BASE}/appointments/unscheduled/?category_id=${queueModalCategory.id}&status=active&page_size=5`, { headers: authHeaders });
+        try {
+        const r = await fetch(`${API_BASE}/appointments/unscheduled-count/?category_id=${queueModalCategory.id}&status=active`, { headers: authHeaders });
         if (!mounted) return;
         if (r.ok) {
           const d = await r.json();
-          setQueuePreview({ count: d.count || 0, items: d.results || [] });
+          setQueuePreview({ count: d.count || 0, items: [] });
         } else {
           setQueuePreview({ count: 0, items: [] });
         }
