@@ -20,6 +20,7 @@ import {
   Fade,
   Divider,
   Paper,
+  Tooltip,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -31,10 +32,37 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
+import MapIcon from '@mui/icons-material/Map';
+import LocalPhoneOutlinedIcon from '@mui/icons-material/LocalPhoneOutlined';
+import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import BookingConfirmDialog from '../components/BookingConfirmDialog.js';
 import SchedulerDialog from '../components/SchedulerDialog.js';
 
 const API_BASE = '/api';
+
+/** Format total minutes into a human-readable string, e.g. 90 → "1 hr 30 min" */
+function formatWaitMinutes(totalMins) {
+  if (!totalMins || totalMins <= 0) return null;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h > 0 && m > 0) return `${h} hr ${m} min`;
+  if (h > 0) return `${h} hr`;
+  return `${m} min`;
+}
+
+/** Build a Google Maps search URL from address parts */
+function mapsUrl(org) {
+  const parts = [
+    org?.address_line1,
+    org?.address_line2,
+    org?.pincode,
+    org?.city,
+    org?.state,
+    org?.country,
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(', '))}`;
+}
 
 function CategoryCard({ cat, onSelect }) {
   const theme = useTheme();
@@ -87,6 +115,39 @@ function CategoryCard({ cat, onSelect }) {
                 {isScheduled && cat.time_interval_per_appointment && <Chip label={`${cat.time_interval_per_appointment} min slots`} size="small" sx={{ height: 20, fontSize: 11, bgcolor: '#e8f5e9', color: '#2e7d32' }} />}
                 {isScheduled && cat.max_advance_days && <Chip label={`Book up to ${cat.max_advance_days}d ahead`} size="small" sx={{ height: 20, fontSize: 11, bgcolor: '#f5f5f5', color: '#616161' }} />}
               </Stack>
+              {/* Address & phone — shown when populated */}
+              {(cat.address_line1 || cat.phone_number) && (
+                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+                  {cat.address_line1 && (
+                    <Box
+                      component="a"
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([cat.address_line1, cat.address_line2, cat.pincode].filter(Boolean).join(', '))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                    >
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#e53935', color: '#fff', borderRadius: '6px', width: 22, height: 22, flexShrink: 0 }}>
+                        <MapIcon sx={{ fontSize: 14 }} />
+                      </Box>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {[cat.address_line1, cat.pincode].filter(Boolean).join(', ')}
+                      </Typography>
+                    </Box>
+                  )}
+                  {cat.phone_number && (
+                    <Box
+                      component="a"
+                      href={`tel:${cat.phone_number}`}
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ display: 'flex', alignItems: 'center', gap: 0.4, textDecoration: 'none' }}
+                    >
+                      <LocalPhoneOutlinedIcon sx={{ fontSize: 13, color: 'success.main' }} />
+                      <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{cat.phone_number}</Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
             </Box>
           </Box>
         </CardContent>
@@ -176,12 +237,28 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
       </DialogTitle>
       <DialogContent>
         {preview && preview.count > 0 && (
-          <Box sx={{ mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>{`There are ${preview.count} people currently waiting.`}</Typography>
+          <Box sx={{ mb: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              {`There ${preview.count === 1 ? 'is' : 'are'} ${preview.count} ${preview.count === 1 ? 'person' : 'people'} currently waiting.`}
+            </Typography>
             <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
+            {/* Show estimated wait if category has estimated_time (minutes per person) */}
+            {category?.estimated_time > 0 && (() => {
+              const waitStr = formatWaitMinutes(preview.count * category.estimated_time);
+              return waitStr ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.75, bgcolor: 'rgba(255,152,0,0.08)', border: '1px solid rgba(255,152,0,0.25)', borderRadius: 1.5, px: 1.25, py: 0.5, width: 'fit-content' }}>
+                  <AccessTimeOutlinedIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                  <Typography variant="caption" color="warning.dark" fontWeight={700}>
+                    Estimated wait: ~{waitStr}
+                  </Typography>
+                </Box>
+              ) : null;
+            })()}
           </Box>
         )}
-        <Typography variant="body2" color="text.secondary">You are joining the walk-in queue for <strong>{category?.name || category?.description}</strong>.</Typography>
+        <Typography variant="body2" color="text.secondary">
+          You are joining the walk-in queue for <strong>{category?.name || category?.description}</strong>.
+        </Typography>
         {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
@@ -312,7 +389,24 @@ export default function OrgBookingPage() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
   <Box sx={{ background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)', color: '#fff', pt: isMobile ? 4 : 5, pb: isMobile ? 5 : 6, px: isMobile ? 2.5 : 4, position: 'relative' }}>
-        <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate(isLoggedIn ? '/home' : '/')} sx={{ color: 'rgba(255,255,255,0.75)', mb: 2, textTransform: 'none', fontWeight: 500 }}>{isLoggedIn ? 'Home' : 'Sign In'}</Button>
+        {/* Top nav row — back button left, login button right when not signed in */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          {isLoggedIn ? (
+            <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/home')} sx={{ color: 'rgba(255,255,255,0.75)', textTransform: 'none', fontWeight: 500 }}>Home</Button>
+          ) : (
+            <Box /> /* spacer so login button aligns right */
+          )}
+          {!isLoggedIn && (
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => openLogin({ from: window.location.pathname + window.location.search })}
+              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 2, fontWeight: 700, textTransform: 'none', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}
+            >
+              Sign In
+            </Button>
+          )}
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
           <Avatar sx={{ width: 52, height: 52, bgcolor: 'rgba(255,255,255,0.2)', fontSize: 22, fontWeight: 800 }}><BusinessOutlinedIcon sx={{ fontSize: 28 }} /></Avatar>
           <Box>
@@ -320,9 +414,70 @@ export default function OrgBookingPage() {
             {org?.type && <Chip label={org.type} size="small" sx={{ mt: 0.5, height: 20, fontSize: 11, fontWeight: 600, bgcolor: (theme) => theme.palette.custom.mint, color: (theme) => theme.palette.custom.deepSlate }} />}
           </Box>
         </Box>
-        {(org?.city || org?.country) && (<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1, opacity: 0.85 }}><LocationOnOutlinedIcon sx={{ fontSize: 15 }} /><Typography variant="body2">{[org.city, org.state, org.country].filter(Boolean).join(', ')}</Typography></Box>)}
+        {/* Address row — full address with Google Maps link */}
+        {(() => {
+          const addrParts = [org?.address_line1, org?.address_line2, org?.pincode, org?.city, org?.state, org?.country].filter(Boolean);
+          const url = mapsUrl(org);
+          if (!addrParts.length) return null;
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mt: 1, opacity: 0.9 }}>
+              <LocationOnOutlinedIcon sx={{ fontSize: 15, mt: '2px', flexShrink: 0 }} />
+              <Typography variant="body2" sx={{ flex: 1 }}>{addrParts.join(', ')}</Typography>
+              {url && (
+                <Tooltip title="Open in Google Maps">
+                  <Box
+                    component="a"
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      ml: 1,
+                      flexShrink: 0,
+                      bgcolor: '#e53935',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      width: 30,
+                      height: 30,
+                      boxShadow: '0 2px 8px rgba(229,57,53,0.45)',
+                      transition: 'transform 0.15s, box-shadow 0.15s',
+                      '&:hover': { bgcolor: '#c62828', transform: 'scale(1.1)', boxShadow: '0 4px 14px rgba(229,57,53,0.55)' },
+                    }}
+                  >
+                    <MapIcon sx={{ fontSize: 17 }} />
+                  </Box>
+                </Tooltip>
+              )}
+            </Box>
+          );
+        })()}
+        {/* Phone number */}
+        {org?.phone_number && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: 0.9 }}>
+            <LocalPhoneOutlinedIcon sx={{ fontSize: 14 }} />
+            <Typography
+              component="a"
+              href={`tel:${org.phone_number}`}
+              variant="body2"
+              sx={{ color: 'rgba(255,255,255,0.9)', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+            >
+              {org.phone_number}
+            </Typography>
+          </Box>
+        )}
         {org?.portfolio_site && (<Typography variant="caption" component="a" href={org.portfolio_site} target="_blank" rel="noopener noreferrer" sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.75)', textDecoration: 'underline' }}>{org.portfolio_site}</Typography>)}
-        {!isLoggedIn && (<Paper sx={{ mt: 2, p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}><Typography variant="body2" sx={{ color: '#fff', fontWeight: 500 }}>👋 Sign in to book an appointment with this organisation.</Typography></Paper>)}
+        {!isLoggedIn && (
+          <Paper
+            onClick={() => openLogin({ from: window.location.pathname + window.location.search })}
+            sx={{ mt: 2, p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer', '&:hover': { bgcolor: 'rgba(255,255,255,0.22)' } }}
+          >
+            <Typography variant="body2" sx={{ color: '#fff', fontWeight: 500 }}>
+              👋 Sign in to book an appointment — <Box component="span" sx={{ textDecoration: 'underline', fontWeight: 700 }}>tap here to log in</Box>
+            </Typography>
+          </Paper>
+        )}
       </Box>
 
       <Box sx={{ flex: 1, maxWidth: isMobile ? '100%' : 720, mx: 'auto', width: '100%', px: isMobile ? 1.5 : 3, py: 3 }}>

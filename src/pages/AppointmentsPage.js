@@ -132,6 +132,17 @@ function AppointmentRow({ appt, onClick }) {
               : formatServerDateTime(appt.scheduled_time)}`
             : ' · 🚶 Walk-in'}
         </Typography>
+        {/* Estimated wait time for walk-in appointments */}
+        {!appt.is_scheduled && appt.counter != null && appt.counter > 0 && appt.category_estimated_time > 0 && (
+          <Typography variant="caption" sx={{ color: 'warning.dark', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            ⏱ ~{(() => {
+              const mins = (appt.counter - 1) * appt.category_estimated_time;
+              if (mins <= 0) return 'your turn soon';
+              if (mins >= 60) { const h = Math.floor(mins / 60); const m = mins % 60; return m > 0 ? `${h} hr ${m} min` : `${h} hr`; }
+              return `${mins} min`;
+            })()} wait
+          </Typography>
+        )}
       </Box>
 
       {/* Right side */}
@@ -265,11 +276,16 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             );
           })()}
 
-          {appt.estimated_time && (
+          {!appt.is_scheduled && appt.counter != null && appt.counter > 0 && appt.category_estimated_time > 0 && (
             <DetailRow
               icon={<AccessTimeOutlinedIcon sx={{ color: 'warning.main' }} />}
               label="Estimated Wait Time"
-              value={new Date(appt.estimated_time).toLocaleTimeString()}
+              value={(() => {
+                const mins = (appt.counter - 1) * appt.category_estimated_time;
+                if (mins <= 0) return '🎉 Your turn soon!';
+                if (mins >= 60) { const h = Math.floor(mins / 60); const m = mins % 60; return m > 0 ? `~${h} hr ${m} min` : `~${h} hr`; }
+                return `~${mins} min`;
+              })()}
               highlight
             />
           )}

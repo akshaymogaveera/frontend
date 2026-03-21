@@ -60,6 +60,37 @@ import Navbar from '../components/Navbar.js';
 
 const API_BASE = '/api';
 
+/**
+ * Parse an API error response body into a human-readable string.
+ * Handles: { detail }, { errors: string }, { errors: { field: [msgs] } },
+ *          { message }, { non_field_errors }, raw strings, and JSON fallback.
+ */
+function parseApiError(err, fallback = 'Something went wrong') {
+  if (!err) return fallback;
+  if (typeof err === 'string') return err;
+  if (err.detail) return err.detail;
+  if (err.message) return err.message;
+  if (err.non_field_errors) return [].concat(err.non_field_errors).join(' ');
+  if (err.errors) {
+    if (typeof err.errors === 'string') return err.errors;
+    if (typeof err.errors === 'object') {
+      return Object.entries(err.errors)
+        .map(([field, msgs]) => {
+          const fieldLabel = field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
+          const msg = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
+          return `${fieldLabel}: ${msg}`;
+        })
+        .join(' · ');
+    }
+  }
+  // Last resort: try to extract any string values from the object
+  try {
+    const vals = Object.values(err).flat().filter((v) => typeof v === 'string');
+    if (vals.length) return vals.join(' · ');
+  } catch (_) { /* ignore */ }
+  return fallback;
+}
+
 // Small curated country list for admin phone entry (flag emoji + dial code)
 const COUNTRIES = [
   { code: 'US', label: 'United States', dial: '+1', flag: '🇺🇸' },
@@ -505,23 +536,15 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
                   const now = el.getBoundingClientRect();
                   const dy = prev.top - now.top;
                   if (dy) {
-                    // Add a subtle horizontal nudge and fade for a smoother, more organic swap.
-                    // Apply the inverse transform immediately, force reflow, then enable
-                    // transition and remove the transform so the browser animates into place.
                     const dx = dy > 0 ? 6 : -6;
-                    // Set to previous position (no transition yet)
                     el.style.transform = `translateY(${dy}px) translateX(${dx}px)`;
                     el.style.opacity = '0.92';
-                    // Force reflow
-                    // eslint-disable-next-line no-unused-expressions
                     el.getBoundingClientRect();
-                    // Now enable transition and animate to zero
                     el.style.transition = 'transform 420ms cubic-bezier(0.22,1,0.36,1), opacity 420ms ease';
                     requestAnimationFrame(() => {
                       el.style.transform = '';
                       el.style.opacity = '';
                     });
-                    // Cleanup styles after animation
                     setTimeout(() => { if (el) { el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; } }, 480);
                   }
                 });
@@ -531,17 +554,42 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
 
           showToast('↕️ Queue updated');
         } else {
-          showToast(
-            action === 'checkin' ? '✅ Checked in' :
+          const toastMsg =
+            action === 'checkin'  ? '✅ Checked in' :
             action === 'checkout' ? '🏁 Checked out' :
-            action === 'cancel' ? '❌ Cancelled' : '↕️ Queue updated'
-          );
-          // For other actions, refresh the list from server to ensure canonical state
-          fetchAppointments();
+            action === 'cancel'   ? '❌ Cancelled' : 'Done';
+
+          // Animate the card: slide right + fade out, then remove from list
+          const el = itemRefs.current && itemRefs.current[appt.id];
+          const DURATION = 380;
+          if (el) {
+            el.style.transition = `transform ${DURATION}ms cubic-bezier(0.4,0,1,1), opacity ${DURATION}ms ease, max-height ${DURATION}ms ease, margin ${DURATION}ms ease`;
+            el.style.transform = 'translateX(60px)';
+            el.style.opacity = '0';
+            el.style.maxHeight = el.offsetHeight + 'px';
+            el.style.overflow = 'hidden';
+            // After slide-out, collapse height to zero so space closes smoothly
+            setTimeout(() => {
+              if (el) {
+                el.style.maxHeight = '0';
+                el.style.marginBottom = '0';
+                el.style.paddingTop = '0';
+                el.style.paddingBottom = '0';
+              }
+            }, DURATION - 20);
+            setTimeout(() => {
+              setAppointments((prev) => prev.filter((a) => a.id !== appt.id));
+            }, DURATION + 80);
+          } else {
+            // No DOM ref — just remove immediately
+            setAppointments((prev) => prev.filter((a) => a.id !== appt.id));
+          }
+
+          showToast(toastMsg);
         }
       } else if (res) {
-        const err = await res.json();
-        showToast(err.detail || (err.errors && JSON.stringify(err.errors)) || 'Action failed', 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(parseApiError(err, 'Action failed'), 'error');
       }
     } catch {
       showToast('Network error', 'error');
@@ -799,13 +847,13 @@ export default function AdminPage() {
     DAYS_OF_WEEK.forEach((d) => { o[d] = []; });
     return o;
   };
-  const [createForm, setCreateForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
+  const [createForm, setCreateForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
 
   const closeCreateDialog = () => {
     setCreateDialogOpen(false);
-    setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
+    setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
     setCreateError('');
     setCreateLoading(false);
     setCreateDayErrors({});
@@ -830,7 +878,7 @@ export default function AdminPage() {
   // Edit category dialog state
   const [editCatDialogOpen, setEditCatDialogOpen] = useState(false);
   const [editCatTarget, setEditCatTarget] = useState(null);
-  const [editCatForm, setEditCatForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, opening_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(), break_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })() });
+  const [editCatForm, setEditCatForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', max_advance_days: 7, max_scheduled_per_user_per_day: '', time_zone: 'UTC', opening_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(), break_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })() });
   const [editCatLoading, setEditCatLoading] = useState(false);
   const [editCatError, setEditCatError] = useState('');
 
@@ -1238,16 +1286,14 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setCreateDialogOpen(false);
-  setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
+  setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
         setCreateDayErrors({});
         setToast({ open: true, msg: 'Category created', severity: 'success' });
         setRefreshCategoriesKey((k) => k + 1);
       } else {
           const err = await res.json().catch(() => ({}));
-          // Log for debugging
-          // eslint-disable-next-line no-console
-          console.error('Create category failed', res.status, err);
-          setCreateError(err.detail || (err.errors && JSON.stringify(err.errors)) || 'Failed to create category');
+          console.error('Create category failed', res.status, err); // eslint-disable-line no-console
+          setCreateError(parseApiError(err, 'Failed to create category'));
       }
     } catch (e) {
         // eslint-disable-next-line no-console
@@ -1283,6 +1329,14 @@ export default function AdminPage() {
       type: cat.type || 'general',
       is_scheduled: !!cat.is_scheduled,
       time_interval_per_appointment: (intervalToMinutes(cat.time_interval_per_appointment) || 15),
+      estimated_time: cat.estimated_time != null ? String(cat.estimated_time) : '',
+      address_line1: cat.address_line1 || '',
+      address_line2: cat.address_line2 || '',
+      pincode: cat.pincode || '',
+      phone_number: cat.phone_number || '',
+      max_advance_days: cat.max_advance_days != null ? cat.max_advance_days : 7,
+      max_scheduled_per_user_per_day: cat.max_scheduled_per_user_per_day != null ? String(cat.max_scheduled_per_user_per_day) : '',
+      time_zone: cat.time_zone || 'UTC',
       opening_hours: cat.opening_hours || (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(),
       break_hours: cat.break_hours || (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(),
     });
@@ -1312,6 +1366,10 @@ export default function AdminPage() {
         ...editCatForm,
         // Convert minutes integer to HH:MM:SS duration string for Django DurationField
         time_interval_per_appointment: minutesToDuration(editCatForm.time_interval_per_appointment),
+        // Cast numeric fields — send null if blank
+        max_advance_days: editCatForm.max_advance_days !== '' ? Number(editCatForm.max_advance_days) : 7,
+        max_scheduled_per_user_per_day: editCatForm.max_scheduled_per_user_per_day !== '' ? Number(editCatForm.max_scheduled_per_user_per_day) : null,
+        estimated_time: editCatForm.estimated_time !== '' ? Number(editCatForm.estimated_time) : null,
       };
       const res = await fetch(`${API_BASE}/categories/${editCatTarget.id}/update-info/`, {
         method: 'PATCH',
@@ -1336,8 +1394,8 @@ export default function AdminPage() {
       } else {
         const err = await res.json().catch(() => ({}));
         // eslint-disable-next-line no-console
-        console.error('Edit category failed', res.status, err);
-        setEditCatError(err.detail || (err.errors && JSON.stringify(err.errors)) || 'Failed to update category');
+        console.error('Edit category failed', res.status, err); // eslint-disable-line no-console
+        setEditCatError(parseApiError(err, 'Failed to update category'));
       }
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -1417,8 +1475,8 @@ export default function AdminPage() {
       } else {
         const err = await res.json().catch(() => ({}));
         // eslint-disable-next-line no-console
-        console.error('Create/update category user failed', res.status, err);
-        setCreateUserError(err.detail || (err.errors && JSON.stringify(err.errors)) || 'Failed to create/update user');
+        console.error('Create/update category user failed', res.status, err); // eslint-disable-line no-console
+        setCreateUserError(parseApiError(err, 'Failed to create/update user'));
       }
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -1549,6 +1607,7 @@ export default function AdminPage() {
         first_name: queueForm.first_name.trim(),
         last_name: queueForm.last_name ? queueForm.last_name.trim() : '',
         phone: phoneDigits,
+        country_code: selectedCountry ? selectedCountry.code : 'IN',
         email: queueForm.email ? queueForm.email.trim() : '',
       };
       const res = await fetch(`${API_BASE}/appointments/add_user_to_queue/`, {
@@ -1563,38 +1622,12 @@ export default function AdminPage() {
         setQueueRefreshKey((k) => k + 1);
         closeQueueModal();
       } else {
-        let msg = 'Failed to add user to queue';
         try {
           const err = await res.json();
-          if (!err) {
-            msg = 'Failed to add user to queue';
-          } else if (typeof err === 'string') {
-            msg = err;
-          } else if (err.detail) {
-            msg = err.detail;
-          } else if (err.errors) {
-            if (typeof err.errors === 'string') {
-              msg = err.errors;
-            } else if (typeof err.errors === 'object') {
-              // Extract human-readable messages from each field
-              msg = Object.values(err.errors)
-                .flat()
-                .join(' ');
-            } else {
-              msg = String(err.errors);
-            }
-          } else if (err.message) {
-            msg = err.message;
-          } else if (err.non_field_errors) {
-            msg = [].concat(err.non_field_errors).join(' ');
-          } else {
-            // Fallback: stringify whatever structure we received
-            msg = JSON.stringify(err);
-          }
+          setQueueError(parseApiError(err, 'Failed to add user to queue'));
         } catch (e) {
-          msg = 'Failed to add user to queue';
+          setQueueError('Failed to add user to queue');
         }
-        setQueueError(msg);
       }
     } catch (e) {
       setQueueError('Network error');
@@ -1837,7 +1870,7 @@ export default function AdminPage() {
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
                   {currentOrg && canManageOrg(currentOrg.id) && (
                     <>
-                      <Button variant="contained" size="small" onClick={() => { setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() }); setCreateError(''); setCreateDialogOpen(true); }} sx={{ borderRadius: 6, mr: 1 }}>
+                      <Button variant="contained" size="small" onClick={() => { setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() }); setCreateError(''); setCreateDialogOpen(true); }} sx={{ borderRadius: 6, mr: 1 }}>
                         + New Category
                       </Button>
                       {isOrgAdmin && (
@@ -1907,6 +1940,53 @@ export default function AdminPage() {
                       label="Description"
                       value={createForm.description}
                       onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))}
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Estimated time per person (minutes)"
+                      type="number"
+                      inputProps={{ min: 1 }}
+                      value={createForm.estimated_time}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, estimated_time: e.target.value }))}
+                      helperText="Used to show estimated wait time in the walk-in queue (e.g. 15)"
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Address line 1 (optional)"
+                      value={createForm.address_line1}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, address_line1: e.target.value }))}
+                      helperText="Street address specific to this service location"
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Address line 2 (optional)"
+                      value={createForm.address_line2}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, address_line2: e.target.value }))}
+                      helperText="Floor, suite, landmark"
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Pincode / ZIP (optional)"
+                      value={createForm.pincode}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, pincode: e.target.value }))}
+                      helperText="Postal / ZIP code"
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Phone number (optional)"
+                      value={createForm.phone_number}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, phone_number: e.target.value }))}
+                      helperText="E.164 format, e.g. +911234567890"
                       sx={{ mb: 2 }}
                     />
                     <FormControl fullWidth size="small" sx={{ mb: 2 }}>
@@ -2178,6 +2258,89 @@ export default function AdminPage() {
                             label="Description"
                             value={editCatForm.description}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, description: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Estimated time per person (min)"
+                            type="number"
+                            inputProps={{ min: 1 }}
+                            value={editCatForm.estimated_time}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, estimated_time: e.target.value }))}
+                            helperText="Walk-in wait estimate in minutes"
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Phone (optional)"
+                            value={editCatForm.phone_number}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, phone_number: e.target.value }))}
+                            helperText="E.164, e.g. +911234567890"
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Address line 1 (optional)"
+                            value={editCatForm.address_line1}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, address_line1: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Address line 2 (optional)"
+                            value={editCatForm.address_line2}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, address_line2: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Pincode / ZIP (optional)"
+                            value={editCatForm.pincode}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, pincode: e.target.value }))}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Max advance days"
+                            type="number"
+                            inputProps={{ min: 1 }}
+                            value={editCatForm.max_advance_days}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, max_advance_days: e.target.value }))}
+                            helperText="How many days ahead users can book"
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Max bookings per user per day"
+                            type="number"
+                            inputProps={{ min: 1 }}
+                            value={editCatForm.max_scheduled_per_user_per_day}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, max_scheduled_per_user_per_day: e.target.value }))}
+                            helperText="Leave blank for unlimited"
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            size="small"
+                            label="Timezone"
+                            value={editCatForm.time_zone}
+                            onChange={(e) => setEditCatForm((f) => ({ ...f, time_zone: e.target.value }))}
+                            helperText="e.g. Asia/Kolkata, America/New_York"
                             fullWidth
                           />
                         </Grid>

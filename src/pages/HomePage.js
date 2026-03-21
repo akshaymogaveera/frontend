@@ -38,6 +38,8 @@ import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import MapIcon from '@mui/icons-material/Map';
+import PhoneIcon from '@mui/icons-material/Phone';
 import { timeOnly, formatDateTime, formatDate, formatServerDateTime } from '../utils/timezone.js';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -140,6 +142,39 @@ function OrgCard({ org, onClick }) {
               sx={{ fontSize: 11, height: 22 }}
             />
           </Box>
+          {/* Address & phone row */}
+          {(org.address_line1 || org.phone_number) && (
+            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+              {org.address_line1 && (
+                <Tooltip title="Open in Maps">
+                  <Box
+                    component="a"
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([org.address_line1, org.address_line2, org.pincode, org.city].filter(Boolean).join(', '))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', color: 'primary.main', fontSize: 12, fontWeight: 500 }}
+                  >
+                    <MapIcon sx={{ fontSize: 15, color: '#e53935' }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {[org.address_line1, org.pincode].filter(Boolean).join(', ')}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+              {org.phone_number && (
+                <Box
+                  component="a"
+                  href={`tel:${org.phone_number}`}
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                >
+                  <PhoneIcon sx={{ fontSize: 13, color: 'success.main' }} />
+                  <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{org.phone_number}</Typography>
+                </Box>
+              )}
+            </Box>
+          )}
         </CardContent>
       </CardActionArea>
     </Card>
@@ -246,6 +281,39 @@ function CategoryCard({ category, onClick }) {
               sx={{ fontSize: 11, height: 22 }}
             />
           </Box>
+          {/* Category-specific address & phone (if set) */}
+          {(category.address_line1 || category.phone_number) && (
+            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+              {category.address_line1 && (
+                <Tooltip title="Open in Maps">
+                  <Box
+                    component="a"
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([category.address_line1, category.address_line2, category.pincode].filter(Boolean).join(', '))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                  >
+                    <MapIcon sx={{ fontSize: 14, color: '#e53935' }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {[category.address_line1, category.pincode].filter(Boolean).join(', ')}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+              {category.phone_number && (
+                <Box
+                  component="a"
+                  href={`tel:${category.phone_number}`}
+                  onClick={(e) => e.stopPropagation()}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                >
+                  <PhoneIcon sx={{ fontSize: 12, color: 'success.main' }} />
+                  <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{category.phone_number}</Typography>
+                </Box>
+              )}
+            </Box>
+          )}
         </CardContent>
       </CardActionArea>
     </Card>
@@ -847,6 +915,38 @@ export default function HomePage() {
                       <LocationOnOutlinedIcon sx={{ fontSize: 13, verticalAlign: 'middle', mr: 0.3 }} />
                       {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country].filter(Boolean).join(', ')}
                     </Typography>
+                    {(selectedOrg?.address_line1 || selectedOrg?.phone_number) && (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mt: 0.5 }}>
+                        {selectedOrg?.address_line1 && (
+                          <Box
+                            component="a"
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode, selectedOrg.city].filter(Boolean).join(', '))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                          >
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#e53935', borderRadius: '5px', width: 20, height: 20, flexShrink: 0 }}>
+                              <MapIcon sx={{ fontSize: 13, color: '#fff' }} />
+                            </Box>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {[selectedOrg.address_line1, selectedOrg.pincode].filter(Boolean).join(', ')}
+                            </Typography>
+                          </Box>
+                        )}
+                        {selectedOrg?.phone_number && (
+                          <Box
+                            component="a"
+                            href={`tel:${selectedOrg.phone_number}`}
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.4, textDecoration: 'none' }}
+                          >
+                            <PhoneIcon sx={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }} />
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>{selectedOrg.phone_number}</Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
                   </Box>
                 </CardContent>
               </Card>
