@@ -877,6 +877,17 @@ export default function AdminPage() {
     return null;
   };
 
+  // Convert minutes (integer) to a Django-compatible DurationField string 'HH:MM:SS'.
+  // Django DurationField requires a duration string; sending a bare integer causes it
+  // to be interpreted as seconds instead of minutes, resulting in 0-minute slots.
+  const minutesToDuration = (mins) => {
+    const m = Number(mins);
+    if (!Number.isFinite(m) || m <= 0) return '00:15:00'; // safe default
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    return `${String(h).padStart(2, '0')}:${String(rem).padStart(2, '0')}:00`;
+  };
+
   const formatIntervalLabel = (m) => {
     if (!m && m !== 0) return '';
     if (m >= 60) {
@@ -1214,7 +1225,12 @@ export default function AdminPage() {
           setCreateDayErrors({});
         }
       }
-      const payload = { ...createForm, organization: currentOrg && currentOrg.id };
+      const payload = {
+        ...createForm,
+        organization: currentOrg && currentOrg.id,
+        // Convert minutes integer to HH:MM:SS duration string for Django DurationField
+        time_interval_per_appointment: minutesToDuration(createForm.time_interval_per_appointment),
+      };
       const res = await fetch(`${API_BASE}/categories/`, {
         method: 'POST',
         headers: authHeaders,
@@ -1292,10 +1308,15 @@ export default function AdminPage() {
       }
     }
     try {
+      const editPayload = {
+        ...editCatForm,
+        // Convert minutes integer to HH:MM:SS duration string for Django DurationField
+        time_interval_per_appointment: minutesToDuration(editCatForm.time_interval_per_appointment),
+      };
       const res = await fetch(`${API_BASE}/categories/${editCatTarget.id}/update-info/`, {
         method: 'PATCH',
         headers: authHeaders,
-        body: JSON.stringify(editCatForm),
+        body: JSON.stringify(editPayload),
       });
       if (res.ok) {
         const updated = await res.json().catch(() => null);
