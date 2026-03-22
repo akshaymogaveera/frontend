@@ -23,7 +23,10 @@ import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 
 function HideOnScroll({ children }) {
-  const trigger = useScrollTrigger();
+  const trigger = useScrollTrigger({
+    disableHysteresis: false,
+    threshold: 50,
+  });
   return (
     <Slide appear={false} direction="down" in={!trigger}>
       {children}

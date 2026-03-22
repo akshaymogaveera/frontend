@@ -35,3 +35,27 @@ html, body, #root {
   /* modern syntax */
   padding-top: calc(env(safe-area-inset-top) + 24px);
 }
+
+/* Prevent zoom on input focus on iOS/mobile — font-size must be 16px or larger to avoid auto-zoom */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
+/* Disable text zoom on input focus (iOS) */
+input:focus, textarea:focus, select:focus {
+  zoom: 1 !important;
+  /* Ensure no zoom transform */
+  transform: scale(1) !important;
+}
+
+/* Navbar optimization - prevent reflow and flickering during scroll */
+.MuiAppBar-root {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Prevent layout shifts on scrollbar appearance */
+html {
+  overflow-y: scroll;
+}
