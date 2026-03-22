@@ -172,6 +172,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   const [noteText, setNoteText] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
   const [noteError, setNoteError] = useState('');
+  const [notesExpanded, setNotesExpanded] = useState(false);
 
   // Stable refs so async callbacks always get latest values
   const tokenRef = React.useRef(token);
@@ -254,6 +255,9 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   if (!appt) return null;
   const cfg = statusConfig[appt.status] || { label: appt.status, bg: '#f5f5f5', text: '#333' };
   const canCancel = appt.status === 'active' || appt.status === 'inactive';
+  // Detect iOS (covers Safari and Chrome on iOS). We'll apply a larger top offset
+  // on iPhones which sometimes report varying safe-area inset values.
+  const isiOS = typeof navigator !== 'undefined' && /iPhone/.test(navigator.userAgent);
 
   return (
     <Drawer
@@ -270,35 +274,35 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
         <Box
           sx={{
             background: (theme) => theme.palette.custom ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)` : 'var(--gradient-primary)',
-            p: 3,
-            pb: 2,
+            p: 2,
+            pb: 1.5,
             color: '#fff',
           }}
-      >
+        >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Box>
             <Typography variant="overline" sx={{ opacity: 0.75, letterSpacing: 1.5, fontSize: 11 }}>
               Appointment Details
             </Typography>
-            <Typography variant="h5" fontWeight={900}>
+            <Typography variant="h5" fontWeight={900} sx={{ fontSize: isMobile ? '1.5rem' : '1.75rem' }}>
               #{appt.id}
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Chip
               label={cfg.label}
               size="small"
-              sx={{ bgcolor: 'rgba(255,255,255,0.25)', color: (theme) => theme.palette.custom.deepSlate, fontWeight: 700, fontSize: 12, textShadow: '0 1px 0 rgba(255,255,255,0.06)' }}
+              sx={{ bgcolor: 'rgba(255,255,255,0.25)', color: (theme) => theme.palette.custom.deepSlate, fontWeight: 700, fontSize: 11, textShadow: '0 1px 0 rgba(255,255,255,0.06)' }}
             />
             <Tooltip title="Refresh appointment">
               <span>
-                <IconButton onClick={() => onRefresh && onRefresh(appt && appt.id)} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate }} disabled={refreshLoading}>
-                  {refreshLoading ? <CircularProgress size={18} color="inherit" /> : <RefreshIcon />}
+                <IconButton onClick={() => onRefresh && onRefresh(appt && appt.id)} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate, p: '6px' }} disabled={refreshLoading}>
+                  {refreshLoading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon sx={{ fontSize: 16 }} />}
                 </IconButton>
               </span>
             </Tooltip>
-            <IconButton onClick={onClose} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate }}>
-              <CloseIcon />
+              <IconButton onClick={onClose} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate, p: '6px', zIndex: 2 }}>
+              <CloseIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Box>
         </Box>
@@ -307,19 +311,19 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
         {appt.counter != null && (
           <Box
             sx={{
-              mt: 3,
+              mt: 1.5,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               bgcolor: 'rgba(255,255,255,0.13)',
               borderRadius: 3,
-              py: isMobile ? 3 : 2,
+              py: isMobile ? 2 : 1.5,
               px: 2,
             }}
           >
             <Typography
               sx={{
-                fontSize: isMobile ? 80 : 64,
+                fontSize: isMobile ? 60 : 56,
                 fontWeight: 900,
                 lineHeight: 1,
                 color: '#fff',
@@ -329,7 +333,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             >
               #{appt.counter}
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5, fontWeight: 600, letterSpacing: 1 }}>
+            <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.3, fontWeight: 600, letterSpacing: 1, fontSize: 11 }}>
               QUEUE POSITION
             </Typography>
           </Box>
@@ -426,76 +430,107 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
           />
         </List>
 
-        {/* ---- Notes section ---- */}
+        {/* ---- Notes section (Collapsible) ---- */}
         <Divider sx={{ my: 2 }} />
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <NoteOutlinedIcon sx={{ fontSize: 17 }} /> Notes
-        </Typography>
+        <Box
+          onClick={() => setNotesExpanded(!notesExpanded)}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            cursor: 'pointer',
+            py: 1,
+            px: 1,
+            borderRadius: 1,
+            '&:hover': { bgcolor: 'action.hover' },
+            userSelect: 'none',
+          }}
+        >
+          <NoteOutlinedIcon sx={{ fontSize: 17 }} />
+          <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1 }}>
+            Notes {notes.length > 0 && `(${notes.length})`}
+          </Typography>
+          <Box
+            sx={{
+              transform: notesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <ChevronRightIcon sx={{ fontSize: 18 }} />
+          </Box>
+        </Box>
 
-        {loadingNotes ? (
-          <Box>{[...Array(2)].map((_, i) => <Skeleton key={i} variant="rounded" height={48} sx={{ mb: 0.75, borderRadius: 2 }} />)}</Box>
-        ) : notes.length === 0 ? (
-          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 1 }}>No notes yet.</Typography>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
-            {notes.map((note) => (
-              <Paper
-                key={note.id}
-                elevation={0}
-                sx={{
-                  p: 1.25,
-                  borderRadius: 2,
-                  border: note.is_admin_note ? '1px solid #bbdefb' : '1px solid #e0e0e0',
-                  background: note.is_admin_note ? '#e3f2fd' : '#fafafa',
-                }}
-              >
-                {note.content && (
-                  <Typography variant="body2" sx={{ fontSize: '0.82rem', wordBreak: 'break-word' }}>{note.content}</Typography>
-                )}
-                {note.has_file && (
-                  <Button
-                    size="small"
-                    startIcon={<DownloadIcon sx={{ fontSize: 13 }} />}
-                    onClick={() => handleDownloadFile(note.id)}
-                    sx={{ mt: 0.5, fontSize: 11, py: 0.25, px: 0.75, borderRadius: 1.5, textTransform: 'none' }}
+        {/* Notes content - shown when expanded */}
+        {notesExpanded && (
+          <Box sx={{ mt: 1 }}>
+            {loadingNotes ? (
+              <Box>{[...Array(2)].map((_, i) => <Skeleton key={i} variant="rounded" height={48} sx={{ mb: 0.75, borderRadius: 2 }} />)}</Box>
+            ) : notes.length === 0 ? (
+              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 1 }}>No notes yet.</Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
+                {notes.map((note) => (
+                  <Paper
+                    key={note.id}
+                    elevation={0}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 2,
+                      border: note.is_admin_note ? '1px solid #bbdefb' : '1px solid #e0e0e0',
+                      background: note.is_admin_note ? '#e3f2fd' : '#fafafa',
+                    }}
                   >
-                    {note.file_name || 'Download file'}
-                  </Button>
-                )}
-                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.3, fontSize: '0.7rem' }}>
-                  {note.is_admin_note ? '🛡 Admin' : '👤 You'} · {note.added_by_name || ''} · {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
-                </Typography>
-              </Paper>
-            ))}
+                    {note.content && (
+                      <Typography variant="body2" sx={{ fontSize: '0.82rem', wordBreak: 'break-word' }}>{note.content}</Typography>
+                    )}
+                    {note.has_file && (
+                      <Button
+                        size="small"
+                        startIcon={<DownloadIcon sx={{ fontSize: 13 }} />}
+                        onClick={() => handleDownloadFile(note.id)}
+                        sx={{ mt: 0.5, fontSize: 11, py: 0.25, px: 0.75, borderRadius: 1.5, textTransform: 'none' }}
+                      >
+                        {note.file_name || 'Download file'}
+                      </Button>
+                    )}
+                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.3, fontSize: '0.7rem' }}>
+                      {note.is_admin_note ? '🛡 Admin' : '👤 You'} · {note.added_by_name || ''} · {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                    </Typography>
+                  </Paper>
+                ))}
+              </Box>
+            )}
+
+            {/* User add-note input - only shown when notes expanded */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 1 }}>
+              <TextField
+                size="small"
+                multiline
+                minRows={2}
+                placeholder="Note for the staff (optional)"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value.slice(0, 1000))}
+                inputProps={{ maxLength: 1000 }}
+                helperText={`${noteText.length}/1000`}
+                FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+              />
+              {noteError && <Typography variant="caption" color="error">{noteError}</Typography>}
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={submittingNote ? <CircularProgress size={13} /> : <NoteAddOutlinedIcon sx={{ fontSize: 15 }} />}
+                onClick={handleAddUserNote}
+                disabled={submittingNote}
+                sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12, alignSelf: 'flex-end' }}
+              >
+                {submittingNote ? 'Saving…' : 'Add Note'}
+              </Button>
+            </Box>
           </Box>
         )}
-
-        {/* User add-note input */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 1 }}>
-          <TextField
-            size="small"
-            multiline
-            minRows={2}
-            placeholder="Note for the staff (optional)"
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value.slice(0, 1000))}
-            inputProps={{ maxLength: 1000 }}
-            helperText={`${noteText.length}/1000`}
-            FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
-          />
-          {noteError && <Typography variant="caption" color="error">{noteError}</Typography>}
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={submittingNote ? <CircularProgress size={13} /> : <NoteAddOutlinedIcon sx={{ fontSize: 15 }} />}
-            onClick={handleAddUserNote}
-            disabled={submittingNote}
-            sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12, alignSelf: 'flex-end' }}
-          >
-            {submittingNote ? 'Saving…' : 'Add Note'}
-          </Button>
-        </Box>
       </Box>
 
       {/* Footer actions */}

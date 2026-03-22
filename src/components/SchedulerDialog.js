@@ -377,8 +377,12 @@ export default function SchedulerDialog({ open, onClose, onSuccess, org, categor
           },
         }}
       >
-        {/* Gradient top bar */}
-        <Box sx={{ height: 4, flexShrink: 0, background: (theme) => theme.palette.custom?.gradientPrimary ?? 'linear-gradient(90deg,#00C4CC,#007BFF)' }} />
+        {/* Gradient top bar. On mobile, include the safe-area inset so the header isn't hidden by notches/status-bar */}
+        <Box sx={{
+          height: { xs: 'calc(env(safe-area-inset-top, 0px) + 4px)', sm: 4 },
+          flexShrink: 0,
+          background: (theme) => theme.palette.custom?.gradientPrimary ?? 'linear-gradient(90deg,#00C4CC,#007BFF)',
+        }} />
 
         {/* ── Header ── */}
         <DialogTitle sx={{

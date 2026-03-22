@@ -27,3 +27,11 @@ html, body, #root {
   background: var(--gradient-primary);
   color: #fff;
 }
+
+/* Safe-area helper for top headers (iPhone notch). Uses both constant() and env() for broad iOS support. */
+.safe-area-header {
+  /* older iOS syntax */
+  padding-top: calc(constant(safe-area-inset-top) + 24px);
+  /* modern syntax */
+  padding-top: calc(env(safe-area-inset-top) + 24px);
+}
