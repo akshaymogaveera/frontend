@@ -56,6 +56,12 @@ import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import DeleteIcon from '@mui/icons-material/Delete';
+import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
+import NoteOutlinedIcon from '@mui/icons-material/NoteOutlined';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import DownloadIcon from '@mui/icons-material/Download';
 import Navbar from '../components/Navbar.js';
 
 const API_BASE = '/api';
@@ -110,7 +116,239 @@ const statusConfig = {
   cancel:   { label: 'Cancelled',   bg: '#fce4ec', text: '#c62828', borderColor: '#ef9a9a' },
 };
 
-function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }) {
+// ---------------------------------------------------------------------------
+// NotesPanel — shown below an appointment row when the admin clicks "Notes"
+// ---------------------------------------------------------------------------
+const NOTE_MAX_CHARS = 1000;
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'application/pdf'];
+const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+function NotesPanel({ appt, token }) {
+  const API_BASE_NOTES = '/api';
+  const [notes, setNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [noteFile, setNoteFile] = useState(null); // { name, mime, data (base64 data-url) }
+  const [submitting, setSubmitting] = useState(false);
+  const [noteError, setNoteError] = useState('');
+  const fileRef = React.useRef(null);
+  // keep a stable ref to the latest token so effects/callbacks always use current value
+  const tokenRef = React.useRef(token);
+  tokenRef.current = token;
+  const apptIdRef = React.useRef(appt.id);
+  apptIdRef.current = appt.id;
+
+  const doFetch = React.useRef(async () => {
+    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
+    setLoadingNotes(true);
+    try {
+      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/`, { headers: hdrs });
+      if (res.ok) {
+        const data = await res.json();
+        setNotes(data);
+      }
+    } catch (e) { /* ignore */ }
+    setLoadingNotes(false);
+  });
+
+  useEffect(() => {
+    (async () => { await doFetch.current(); })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const mime = file.type || 'application/octet-stream';
+    if (!ALLOWED_MIME.includes(mime)) {
+      setNoteError('Only image files (JPEG, PNG, GIF, WebP) and PDF files are allowed.');
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setNoteError('File must be under 5 MB.');
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    setNoteError('');
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setNoteFile({ name: file.name, mime, data: ev.target.result });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddNote = async () => {
+    if (!noteText.trim() && !noteFile) {
+      setNoteError('Please add a note or attach a file.');
+      return;
+    }
+    setNoteError('');
+    setSubmitting(true);
+    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
+    try {
+      const body = {
+        content: noteText.trim(),
+        ...(noteFile ? { file_data: noteFile.data, file_name: noteFile.name, file_mime: noteFile.mime } : {}),
+      };
+      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/`, {
+        method: 'POST',
+        headers: hdrs,
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setNoteText('');
+        setNoteFile(null);
+        if (fileRef.current) fileRef.current.value = '';
+        await doFetch.current();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setNoteError(parseApiError(err, 'Failed to add note'));
+      }
+    } catch {
+      setNoteError('Network error');
+    }
+    setSubmitting(false);
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    try {
+      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/${noteId}/`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${tokenRef.current}` },
+      });
+      if (res.ok || res.status === 204) {
+        setNotes((prev) => prev.filter((n) => n.id !== noteId));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleDownloadFile = async (noteId) => {
+    try {
+      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/${noteId}/file/`, {
+        headers: { Authorization: `Bearer ${tokenRef.current}` },
+      });
+      if (!res.ok) return;
+      const { file_data, file_name } = await res.json();
+      if (!file_data) return;
+      const a = document.createElement('a');
+      a.href = file_data;
+      a.download = file_name || 'attachment';
+      a.click();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+      <Typography variant="caption" fontWeight={700} sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.8, mb: 1, display: 'block' }}>
+        Notes &amp; Attachments
+      </Typography>
+
+      {/* Existing notes */}
+      {loadingNotes ? (
+        <Skeleton variant="rounded" height={40} sx={{ borderRadius: 2, mb: 1 }} />
+      ) : notes.length === 0 ? (
+        <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 1 }}>No notes yet.</Typography>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
+          {notes.map((note) => (
+            <Paper
+              key={note.id}
+              elevation={0}
+              sx={{
+                p: 1.25,
+                borderRadius: 2,
+                border: note.is_admin_note ? '1px solid #bbdefb' : '1px solid #e0e0e0',
+                background: note.is_admin_note ? '#e3f2fd' : '#fafafa',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1,
+              }}
+            >
+              <NoteOutlinedIcon sx={{ fontSize: 16, mt: 0.2, color: note.is_admin_note ? '#1565c0' : '#9e9e9e', flexShrink: 0 }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {note.content && (
+                  <Typography variant="body2" sx={{ wordBreak: 'break-word', fontSize: '0.82rem' }}>{note.content}</Typography>
+                )}
+                {note.has_file && (
+                  <Button
+                    size="small"
+                    startIcon={<DownloadIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => handleDownloadFile(note.id)}
+                    sx={{ mt: 0.5, fontSize: 11, py: 0.25, px: 0.75, borderRadius: 1.5, textTransform: 'none', color: 'primary.main' }}
+                  >
+                    {note.file_name || 'Download file'}
+                  </Button>
+                )}
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25, fontSize: '0.7rem' }}>
+                  {note.is_admin_note ? '🛡 Admin' : '👤 User'} · {note.added_by_name || ''} · {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                </Typography>
+              </Box>
+              <Tooltip title="Delete note">
+                <IconButton size="small" onClick={() => handleDeleteNote(note.id)} sx={{ flexShrink: 0, color: 'error.light' }}>
+                  <DeleteIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Tooltip>
+            </Paper>
+          ))}
+        </Box>
+      )}
+
+      {/* Add note form */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <TextField
+          size="small"
+          multiline
+          minRows={2}
+          placeholder="Add a note (optional)"
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value.slice(0, NOTE_MAX_CHARS))}
+          inputProps={{ maxLength: NOTE_MAX_CHARS }}
+          helperText={`${noteText.length}/${NOTE_MAX_CHARS}`}
+          FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+        />
+        {noteError && <Typography variant="caption" color="error">{noteError}</Typography>}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFileChange} />
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AttachFileIcon sx={{ fontSize: 14 }} />}
+            onClick={() => fileRef.current && fileRef.current.click()}
+            sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12 }}
+          >
+            {noteFile ? noteFile.name : 'Attach file'}
+          </Button>
+          {noteFile && (
+            <Tooltip title="Remove attachment">
+              <IconButton size="small" onClick={() => { setNoteFile(null); if (fileRef.current) fileRef.current.value = ''; }}>
+                <DeleteIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<NoteAddOutlinedIcon sx={{ fontSize: 14 }} />}
+            onClick={handleAddNote}
+            disabled={submitting}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontSize: 12,
+              background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+            }}
+          >
+            {submitting ? 'Saving…' : 'Add Note'}
+          </Button>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef, token }) {
   const cfg = statusConfig[appt.status] || statusConfig.active;
   const canCheckin = appt.status === 'active' || appt.status === 'inactive';
   const canCheckout = appt.status === 'checkin';   // already checked-in → mark served
@@ -119,6 +357,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
   const canMove = !appt.is_scheduled && appt.status !== 'cancel' && appt.status !== 'checkin';
   // Prefer explicit first/last name supplied by the API. Fall back to username.
   const displayName = `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() || appt.username || `User #${appt.user}`;
+  const [showNotes, setShowNotes] = useState(false);
 
   return (
     <Paper
@@ -227,7 +466,7 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
     {/* Action buttons */}
   <Box sx={{
             display: 'flex',
-            gap: 1,
+            gap: 0.75,
             flexShrink: 0,
             flexWrap: 'wrap',
             alignItems: 'center',
@@ -237,102 +476,89 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
             mt: { xs: 1, sm: 0 },
             px: { xs: 0, sm: 'inherit' },
           }}>
-          {/* Move Up (hidden for scheduled categories) */}
+          {/* Move Up/Down — icon only, always compact */}
           {!appt.is_scheduled && (
-            <Tooltip title="Move Up">
-              <span>
-                <IconButton
-                  size="small"
-                  disabled={loading || !canMove || index === 0}
-                  onClick={() => onAction('move-up', appt, index)}
-                  sx={{
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 2,
-                    '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' },
-                    width: { xs: 34, sm: 'auto' },
-                    height: { xs: 34, sm: 'auto' },
-                  }}
-                >
-                  <ArrowUpwardIcon sx={{ fontSize: 15 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
+              <Tooltip title="Move Up">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={loading || !canMove || index === 0}
+                    onClick={() => onAction('move-up', appt, index)}
+                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30, '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' } }}
+                  >
+                    <ArrowUpwardIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Move Down">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={loading || !canMove || index === totalCount - 1}
+                    onClick={() => onAction('move-down', appt, index)}
+                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, width: 30, height: 30, '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' } }}
+                  >
+                    <ArrowDownwardIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
           )}
 
-          {/* Move Down (hidden for scheduled categories) */}
-          {!appt.is_scheduled && (
-            <Tooltip title="Move Down">
-              <span>
-                <IconButton
-                  size="small"
-                  disabled={loading || !canMove || index === totalCount - 1}
-                  onClick={() => onAction('move-down', appt, index)}
-                  sx={{
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 2,
-                    '&:not(:disabled):hover': { borderColor: 'primary.main', color: 'primary.main' },
-                  }}
-                >
-                  <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
-
-          {/* Check-In */}
+          {/* Check-In — icon on mobile, icon+label on desktop */}
           {canCheckin && (
-            <Tooltip title="Check In — mark as being served">
+            <Tooltip title="Check In">
               <span>
                 <Button
                   size="small"
                   variant="contained"
                   disabled={loading}
                   onClick={() => onAction('checkin', appt)}
-                  startIcon={<CheckCircleOutlineIcon sx={{ fontSize: 14 }} />}
                   sx={{
                     borderRadius: 2,
-                    fontSize: { xs: 11, sm: 12 },
-                    px: { xs: 1, sm: 1.5 },
-                    py: { xs: 0.5, sm: 0.5 },
+                    minWidth: { xs: 36, sm: 'auto' },
+                    px: { xs: 0, sm: 1.5 },
+                    py: 0.5,
                     background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
                     '&:hover': { opacity: 0.95 },
                   }}
                 >
-                  Check In
+                  <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, ml: 0.5, fontSize: 12 }}>Check In</Box>
                 </Button>
               </span>
             </Tooltip>
           )}
 
-          {/* Checkout — only for checkin status, marks as served/done */}
+          {/* Checkout — icon on mobile, icon+label on desktop */}
           {canCheckout && (
-            <Tooltip title="Checkout — mark service complete">
+            <Tooltip title="Checkout">
               <span>
                 <Button
                   size="small"
                   variant="contained"
                   disabled={loading}
                   onClick={() => onAction('checkout', appt)}
-                  startIcon={<LogoutIcon sx={{ fontSize: 15 }} />}
                   sx={{
                     borderRadius: 2,
-                    fontSize: 12,
-                    px: 1.5,
+                    minWidth: { xs: 36, sm: 'auto' },
+                    px: { xs: 0, sm: 1.5 },
+                    py: 0.5,
                     background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
                     '&:hover': { opacity: 0.95 },
                   }}
                 >
-                  Checkout
+                  <LogoutIcon sx={{ fontSize: 15 }} />
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, ml: 0.5, fontSize: 12 }}>Checkout</Box>
                 </Button>
               </span>
             </Tooltip>
           )}
 
-          {/* Cancel */}
+          {/* Cancel — icon on mobile, icon+label on desktop */}
           {canCancel && (
-            <Tooltip title="Cancel Appointment">
+            <Tooltip title="Cancel">
               <span>
                 <Button
                   size="small"
@@ -340,24 +566,49 @@ function AppointmentRow({ appt, index, totalCount, onAction, loading, innerRef }
                   color="error"
                   disabled={loading}
                   onClick={() => onAction('cancel', appt)}
-                  startIcon={<CancelOutlinedIcon sx={{ fontSize: 15 }} />}
                   sx={{
                     borderRadius: 2,
-                    fontSize: { xs: 11, sm: 12 },
-                    px: { xs: 0.9, sm: 1.5 },
-                    whiteSpace: 'nowrap',
-                    maxWidth: { xs: 110, sm: 'none' },
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    minWidth: { xs: 36, sm: 'auto' },
+                    px: { xs: 0, sm: 1.5 },
+                    py: 0.5,
                   }}
                 >
-                  Cancel
+                  <CancelOutlinedIcon sx={{ fontSize: 15 }} />
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, ml: 0.5, fontSize: 12 }}>Cancel</Box>
                 </Button>
               </span>
             </Tooltip>
           )}
+
+          {/* Notes toggle — icon on mobile, icon+label on desktop */}
+          <Tooltip title={showNotes ? 'Hide Notes' : 'Notes'}>
+            <Button
+              size="small"
+              variant={showNotes ? 'contained' : 'outlined'}
+              onClick={() => setShowNotes((v) => !v)}
+              sx={{
+                borderRadius: 2,
+                minWidth: { xs: 36, sm: 'auto' },
+                px: { xs: 0, sm: 1.25 },
+                py: 0.5,
+                textTransform: 'none',
+                ...(showNotes ? {
+                  background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                } : {}),
+              }}
+            >
+              <NoteOutlinedIcon sx={{ fontSize: 15 }} />
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, ml: 0.5, fontSize: 12 }}>
+                Notes{showNotes ? '' : ''}
+              </Box>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                {showNotes ? <ExpandLessIcon sx={{ fontSize: 13, ml: 0.25 }} /> : <ExpandMoreIcon sx={{ fontSize: 13, ml: 0.25 }} />}
+              </Box>
+            </Button>
+          </Tooltip>
         </Box>
       </Box>
+      {showNotes && <NotesPanel appt={appt} token={token} />}
     </Paper>
   );
 }
@@ -693,6 +944,7 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
                 totalCount={filteredAppointments.length}
                 onAction={handleAction}
                 loading={actionLoading}
+                token={token}
                 innerRef={(el) => {
                   if (!itemRefs.current) itemRefs.current = {};
                   if (el) itemRefs.current[appt.id] = el;
@@ -2855,7 +3107,11 @@ export default function AdminPage() {
                     ),
                   }}
                   error={!!queueFormErrors.phone}
-                  helperText={queueFormErrors.phone || 'Enter local phone number (will be saved with selected country code)'}
+                  helperText={queueFormErrors.phone || (() => {
+                    const examples = { US: '202 555 0100', CA: '416 555 0100', IN: '98765 43210', GB: '7911 123456', AU: '412 345 678' };
+                    const ex = examples[selectedCountry?.code] || '10-digit local number';
+                    return `Enter local number without country code, e.g. ${ex}`;
+                  })()}
                 />
               </Grid>
 

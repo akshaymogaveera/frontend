@@ -1,8 +1,10 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Box, Typography, Button, IconButton, Divider } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Box, Typography, Button, IconButton, TextField } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
+
+const NOTE_MAX = 1000;
 
 export default function BookingConfirmDialog({
   open,
@@ -15,6 +17,8 @@ export default function BookingConfirmDialog({
   onViewAppointments,
   onViewAppointment,
   preview = null,
+  note = '',
+  onNoteChange = null,
 }) {
   return (
     <Dialog
@@ -41,7 +45,23 @@ export default function BookingConfirmDialog({
                 <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
               </Box>
             )}
-            {/* caller may render additional details in parent before opening the dialog */}
+            {onNoteChange && (
+              <Box sx={{ mt: 1.5 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  placeholder="Note for the staff (optional)"
+                  value={note}
+                  onChange={(e) => onNoteChange(e.target.value.slice(0, NOTE_MAX))}
+                  inputProps={{ maxLength: NOTE_MAX }}
+                  helperText={`${note.length}/${NOTE_MAX}`}
+                  FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+                />
+              </Box>
+            )}
           </Box>
         )}
         {status === 'loading' && (

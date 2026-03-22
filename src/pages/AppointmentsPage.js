@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 // import { formatToCategoryTimezone } from '../utils/timezone.js';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +31,8 @@ import {
   Paper,
   Menu,
   MenuItem,
+  TextField,
+  Stack,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -47,6 +49,9 @@ import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import NoteOutlinedIcon from '@mui/icons-material/NoteOutlined';
+import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
+import DownloadIcon from '@mui/icons-material/Download';
 import Navbar from '../components/Navbar.js';
 
 const API_BASE = '/api';
@@ -159,6 +164,92 @@ function AppointmentRow({ appt, onClick }) {
 function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, refreshLoading }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const token = localStorage.getItem('accessToken');
+
+  // Notes state
+  const [notes, setNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [submittingNote, setSubmittingNote] = useState(false);
+  const [noteError, setNoteError] = useState('');
+
+  // Stable refs so async callbacks always get latest values
+  const tokenRef = React.useRef(token);
+  tokenRef.current = token;
+  const apptRef = React.useRef(appt);
+  apptRef.current = appt;
+
+  const doFetchNotes = React.useRef(async () => {
+    const a = apptRef.current;
+    if (!a) return;
+    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
+    setLoadingNotes(true);
+    try {
+      const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, { headers: hdrs });
+      if (res.ok) {
+        const data = await res.json();
+        setNotes(data);
+      }
+    } catch (e) { /* ignore */ }
+    setLoadingNotes(false);
+  });
+
+  useEffect(() => {
+    if (open && appt) {
+      (async () => {
+        setNoteText('');
+        setNoteError('');
+        await doFetchNotes.current();
+      })();
+    } else {
+      (async () => { setNotes([]); })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, appt && appt.id]);
+
+  const handleAddUserNote = async () => {
+    const a = apptRef.current;
+    if (!noteText.trim()) {
+      setNoteError('Please write a note before submitting.');
+      return;
+    }
+    setNoteError('');
+    setSubmittingNote(true);
+    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
+    try {
+      const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, {
+        method: 'POST',
+        headers: hdrs,
+        body: JSON.stringify({ content: noteText.trim() }),
+      });
+      if (res.ok) {
+        setNoteText('');
+        await doFetchNotes.current();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setNoteError(err?.errors?.content?.[0] || err?.errors || 'Failed to add note');
+      }
+    } catch {
+      setNoteError('Network error');
+    }
+    setSubmittingNote(false);
+  };
+
+  const handleDownloadFile = async (noteId) => {
+    const a = apptRef.current;
+    try {
+      const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/${noteId}/file/`, {
+        headers: { Authorization: `Bearer ${tokenRef.current}` },
+      });
+      if (!res.ok) return;
+      const { file_data, file_name } = await res.json();
+      if (!file_data) return;
+      const anchor = document.createElement('a');
+      anchor.href = file_data;
+      anchor.download = file_name || 'attachment';
+      anchor.click();
+    } catch { /* ignore */ }
+  };
 
   if (!appt) return null;
   const cfg = statusConfig[appt.status] || { label: appt.status, bg: '#f5f5f5', text: '#333' };
@@ -334,6 +425,77 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             value={appt.is_scheduled ? '📅 Scheduled' : '🚶 Walk-in (Unscheduled)'}
           />
         </List>
+
+        {/* ---- Notes section ---- */}
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <NoteOutlinedIcon sx={{ fontSize: 17 }} /> Notes
+        </Typography>
+
+        {loadingNotes ? (
+          <Box>{[...Array(2)].map((_, i) => <Skeleton key={i} variant="rounded" height={48} sx={{ mb: 0.75, borderRadius: 2 }} />)}</Box>
+        ) : notes.length === 0 ? (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 1 }}>No notes yet.</Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
+            {notes.map((note) => (
+              <Paper
+                key={note.id}
+                elevation={0}
+                sx={{
+                  p: 1.25,
+                  borderRadius: 2,
+                  border: note.is_admin_note ? '1px solid #bbdefb' : '1px solid #e0e0e0',
+                  background: note.is_admin_note ? '#e3f2fd' : '#fafafa',
+                }}
+              >
+                {note.content && (
+                  <Typography variant="body2" sx={{ fontSize: '0.82rem', wordBreak: 'break-word' }}>{note.content}</Typography>
+                )}
+                {note.has_file && (
+                  <Button
+                    size="small"
+                    startIcon={<DownloadIcon sx={{ fontSize: 13 }} />}
+                    onClick={() => handleDownloadFile(note.id)}
+                    sx={{ mt: 0.5, fontSize: 11, py: 0.25, px: 0.75, borderRadius: 1.5, textTransform: 'none' }}
+                  >
+                    {note.file_name || 'Download file'}
+                  </Button>
+                )}
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.3, fontSize: '0.7rem' }}>
+                  {note.is_admin_note ? '🛡 Admin' : '👤 You'} · {note.added_by_name || ''} · {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                </Typography>
+              </Paper>
+            ))}
+          </Box>
+        )}
+
+        {/* User add-note input */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 1 }}>
+          <TextField
+            size="small"
+            multiline
+            minRows={2}
+            placeholder="Note for the staff (optional)"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value.slice(0, 1000))}
+            inputProps={{ maxLength: 1000 }}
+            helperText={`${noteText.length}/1000`}
+            FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+          />
+          {noteError && <Typography variant="caption" color="error">{noteError}</Typography>}
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={submittingNote ? <CircularProgress size={13} /> : <NoteAddOutlinedIcon sx={{ fontSize: 15 }} />}
+            onClick={handleAddUserNote}
+            disabled={submittingNote}
+            sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12, alignSelf: 'flex-end' }}
+          >
+            {submittingNote ? 'Saving…' : 'Add Note'}
+          </Button>
+        </Box>
       </Box>
 
       {/* Footer actions */}

@@ -85,6 +85,7 @@ function OrgCard({ org, onClick }) {
         <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Avatar
+              src={org.display_picture_url || undefined}
               sx={{
                 width: 44,
                 height: 44,
@@ -92,7 +93,7 @@ function OrgCard({ org, onClick }) {
                 fontSize: 18,
               }}
             >
-              <BusinessOutlinedIcon sx={{ fontSize: 22 }} />
+              {!org.display_picture_url && <BusinessOutlinedIcon sx={{ fontSize: 22 }} />}
             </Avatar>
             <Box>
               <Typography
@@ -144,7 +145,18 @@ function OrgCard({ org, onClick }) {
           </Box>
           {/* Address & phone row */}
           {(org.address_line1 || org.phone_number) && (
-            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+            <Box
+              sx={{
+                mt: 1.25,
+                pt: 1,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
               {org.address_line1 && (
                 <Tooltip title="Open in Maps">
                   <Box
@@ -153,10 +165,10 @@ function OrgCard({ org, onClick }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', color: 'primary.main', fontSize: 12, fontWeight: 500 }}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', flex: '1 1 auto', minWidth: 0 }}
                   >
-                    <MapIcon sx={{ fontSize: 15, color: '#e53935' }} />
-                    <Typography variant="caption" sx={{ color: 'text.secondary', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <MapIcon sx={{ fontSize: 14, color: '#e53935', flexShrink: 0 }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {[org.address_line1, org.pincode].filter(Boolean).join(', ')}
                     </Typography>
                   </Box>
@@ -167,7 +179,7 @@ function OrgCard({ org, onClick }) {
                   component="a"
                   href={`tel:${org.phone_number}`}
                   onClick={(e) => e.stopPropagation()}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.4, textDecoration: 'none', flexShrink: 0 }}
                 >
                   <PhoneIcon sx={{ fontSize: 13, color: 'success.main' }} />
                   <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{org.phone_number}</Typography>
@@ -283,7 +295,18 @@ function CategoryCard({ category, onClick }) {
           </Box>
           {/* Category-specific address & phone (if set) */}
           {(category.address_line1 || category.phone_number) && (
-            <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+            <Box
+              sx={{
+                mt: 1.25,
+                pt: 1,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
               {category.address_line1 && (
                 <Tooltip title="Open in Maps">
                   <Box
@@ -292,10 +315,10 @@ function CategoryCard({ category, onClick }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', flex: '1 1 auto', minWidth: 0 }}
                   >
-                    <MapIcon sx={{ fontSize: 14, color: '#e53935' }} />
-                    <Typography variant="caption" sx={{ color: 'text.secondary', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <MapIcon sx={{ fontSize: 14, color: '#e53935', flexShrink: 0 }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {[category.address_line1, category.pincode].filter(Boolean).join(', ')}
                     </Typography>
                   </Box>
@@ -306,7 +329,7 @@ function CategoryCard({ category, onClick }) {
                   component="a"
                   href={`tel:${category.phone_number}`}
                   onClick={(e) => e.stopPropagation()}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', flexShrink: 0 }}
                 >
                   <PhoneIcon sx={{ fontSize: 12, color: 'success.main' }} />
                   <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{category.phone_number}</Typography>
@@ -351,6 +374,7 @@ export default function HomePage() {
   const [bookingError, setBookingError] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmPreview, setConfirmPreview] = useState({ count: 0, items: [] });
+  const [confirmNote, setConfirmNote] = useState('');
   // Scheduled appointment state
   const [scheduledOpen, setScheduledOpen] = useState(false);
 
@@ -587,8 +611,19 @@ export default function HomePage() {
       if (res.ok) {
         const data = await res.json();
         // API may return { appointment: { ... } } or the appointment object directly
-        setBookingResult(data.appointment ? data.appointment : data);
+        const appt = data.appointment ? data.appointment : data;
+        setBookingResult(appt);
         setBookingStatus('success');
+        // Post optional note best-effort
+        if (confirmNote.trim() && appt?.id) {
+          try {
+            await fetch(`${API_BASE}/appointments/${appt.id}/notes/`, {
+              method: 'POST',
+              headers: authHeaders,
+              body: JSON.stringify({ content: confirmNote.trim() }),
+            });
+          } catch { /* ignore */ }
+        }
       } else {
         const err = await res.json();
         // Prefer detail > non_field_errors > first errors.* message > fallback
@@ -670,6 +705,7 @@ export default function HomePage() {
 
   const handleCloseConfirm = () => {
     setConfirmOpen(false);
+    setConfirmNote('');
     if (bookingStatus === 'success') {
       setStep('search');
       setQuery('');
@@ -897,59 +933,116 @@ export default function HomePage() {
         {step === 'categories' && (
           <Fade in timeout={300}>
             <Box>
-              <Card sx={{ mb: 3, background: (theme) => theme.palette.custom && theme.palette.custom.gradientPrimary }}>
-                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <IconButton
-                    onClick={resetToSearch}
-                    size="small"
-                    sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.15)', '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' } }}
+              {/* Org hero banner — matches OrgBookingPage style */}
+              <Box
+                sx={{
+                  background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                  color: '#fff',
+                  borderRadius: 4,
+                  pt: 2.5,
+                  pb: 3,
+                  px: { xs: 2.5, sm: 3 },
+                  mb: 3,
+                  position: 'relative',
+                }}
+              >
+                {/* Back button — top left */}
+                <IconButton
+                  onClick={resetToSearch}
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: 12,
+                    left: 12,
+                    color: 'rgba(255,255,255,0.85)',
+                    bgcolor: 'rgba(255,255,255,0.15)',
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+                  }}
+                >
+                  <ArrowBackIosNewIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+
+                {/* Avatar centered */}
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1.5, mt: 1 }}>
+                  <Avatar
+                    src={selectedOrg?.display_picture_url || undefined}
+                    sx={{
+                      width: { xs: 64, sm: 72 },
+                      height: { xs: 64, sm: 72 },
+                      fontSize: 28,
+                      bgcolor: 'rgba(255,255,255,0.2)',
+                      border: '2px solid rgba(255,255,255,0.35)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                    }}
                   >
-                    <ArrowBackIosNewIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  <Avatar sx={{ width: 48, height: 48, fontSize: 22, bgcolor: 'rgba(255,255,255,0.2)' }}>
-                    {orgTypeIcon(selectedOrg?.type)}
+                    {!selectedOrg?.display_picture_url && orgTypeIcon(selectedOrg?.type)}
                   </Avatar>
-                  <Box sx={{ color: 'white' }}>
-                    <Typography variant="h6" fontWeight={700}>{selectedOrg?.name}</Typography>
+                </Box>
+
+                {/* Org name */}
+                <Typography variant="h6" fontWeight={800} align="center" sx={{ lineHeight: 1.25, mb: 0.5 }}>
+                  {selectedOrg?.name}
+                </Typography>
+
+                {/* Type chip */}
+                {selectedOrg?.type && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Chip
+                      label={selectedOrg.type}
+                      size="small"
+                      sx={{ height: 20, fontSize: 11, fontWeight: 600, bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}
+                    />
+                  </Box>
+                )}
+
+                {/* City / state */}
+                {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country].filter(Boolean).length > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.4, mb: 0.75 }}>
+                    <LocationOnOutlinedIcon sx={{ fontSize: 13, opacity: 0.8 }} />
                     <Typography variant="body2" sx={{ opacity: 0.85 }}>
-                      <LocationOnOutlinedIcon sx={{ fontSize: 13, verticalAlign: 'middle', mr: 0.3 }} />
                       {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country].filter(Boolean).join(', ')}
                     </Typography>
-                    {(selectedOrg?.address_line1 || selectedOrg?.phone_number) && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mt: 0.5 }}>
-                        {selectedOrg?.address_line1 && (
-                          <Box
-                            component="a"
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode, selectedOrg.city].filter(Boolean).join(', '))}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}
-                          >
-                            <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#e53935', borderRadius: '5px', width: 20, height: 20, flexShrink: 0 }}>
-                              <MapIcon sx={{ fontSize: 13, color: '#fff' }} />
-                            </Box>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {[selectedOrg.address_line1, selectedOrg.pincode].filter(Boolean).join(', ')}
-                            </Typography>
-                          </Box>
-                        )}
-                        {selectedOrg?.phone_number && (
-                          <Box
-                            component="a"
-                            href={`tel:${selectedOrg.phone_number}`}
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 0.4, textDecoration: 'none' }}
-                          >
-                            <PhoneIcon sx={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }} />
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>{selectedOrg.phone_number}</Typography>
-                          </Box>
-                        )}
-                      </Box>
-                    )}
                   </Box>
-                </CardContent>
-              </Card>
+                )}
+
+                {/* Address */}
+                {selectedOrg?.address_line1 && (() => {
+                  const addrParts = [selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode].filter(Boolean);
+                  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode, selectedOrg.city].filter(Boolean).join(', '))}`;
+                  return (
+                    <Box
+                      component="a"
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, textDecoration: 'none', px: { xs: 0.5, sm: 1 }, mb: 0.5 }}
+                    >
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#e53935', borderRadius: '6px', width: 22, height: 22, flexShrink: 0, mt: '1px', boxShadow: '0 2px 6px rgba(229,57,53,0.4)' }}>
+                        <MapIcon sx={{ fontSize: 13, color: '#fff' }} />
+                      </Box>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: 1.5 }}>
+                        {addrParts.join(', ')}
+                      </Typography>
+                    </Box>
+                  );
+                })()}
+
+                {/* Phone */}
+                {selectedOrg?.phone_number && (
+                  <Box
+                    component="a"
+                    href={`tel:${selectedOrg.phone_number}`}
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75, textDecoration: 'none', px: { xs: 0.5, sm: 1 } }}
+                  >
+                    <PhoneIcon sx={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', flexShrink: 0 }} />
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
+                      {selectedOrg.phone_number}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
 
               <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
                 Select a service
@@ -1018,7 +1111,9 @@ export default function HomePage() {
         onBookAnother={handleCloseConfirm}
         onViewAppointments={() => { handleCloseConfirm(); navigate('/appointments'); }}
         onViewAppointment={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
-          preview={confirmPreview}
+        preview={confirmPreview}
+        note={confirmNote}
+        onNoteChange={setConfirmNote}
       />
     </Box>
   );

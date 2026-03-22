@@ -13,6 +13,7 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
+  TextField,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
@@ -55,6 +56,7 @@ export default function SchedulerDialog({ open, onClose, onSuccess, org, categor
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  const [userNote, setUserNote] = useState('');
 
   // Set of 'YYYY-MM-DD' strings that have no bookable slots (greyed out in calendar)
   const [disabledDates, setDisabledDates] = useState(new Set());
@@ -323,9 +325,18 @@ export default function SchedulerDialog({ open, onClose, onSuccess, org, categor
       });
       if (res.ok) {
         const data = await res.json();
-        setBookingResult(data.appointment || data);
+        const appt = data.appointment || data;
+        // Post optional user note (best-effort, non-blocking)
+        if (userNote.trim() && appt?.id) {
+          fetch(`${API_BASE}/appointments/${appt.id}/notes/`, {
+            method: 'POST',
+            headers: authHeaders,
+            body: JSON.stringify({ content: userNote.trim() }),
+          }).catch(() => {});
+        }
+        setBookingResult(appt);
         setBookingStatus('success');
-        if (onSuccess) onSuccess(data.appointment || data);
+        if (onSuccess) onSuccess(appt);
       } else {
         const err = await res.json();
         setBookingError(err.detail || err.non_field_errors?.[0] || JSON.stringify(err) || 'Booking failed.');
@@ -574,6 +585,22 @@ export default function SchedulerDialog({ open, onClose, onSuccess, org, categor
                     ✓ Selected: {formatServerDateTime(selectedSlot)}
                   </Typography>
                 </Box>
+              )}
+              {/* Optional note for this appointment */}
+              {selectedSlot && bookingStatus !== 'success' && (
+                <TextField
+                  size="small"
+                  multiline
+                  minRows={2}
+                  fullWidth
+                  placeholder="Note for the staff (optional)"
+                  value={userNote}
+                  onChange={(e) => setUserNote(e.target.value.slice(0, 1000))}
+                  inputProps={{ maxLength: 1000 }}
+                  helperText={`${userNote.length}/1000`}
+                  FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+                  sx={{ mt: 1.5, '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+                />
               )}
             </Box>
           )}

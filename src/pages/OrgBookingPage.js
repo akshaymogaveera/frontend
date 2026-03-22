@@ -160,6 +160,7 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState({ count: 0, items: [] });
+  const [userNote, setUserNote] = useState('');
 
   const token = localStorage.getItem('accessToken');
 
@@ -176,6 +177,15 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
       if (res.ok) {
         // return created appointment object to caller so the page can show a modal
         const data = await res.json();
+        // If user left a note, post it silently (best-effort, don't block success)
+        if (userNote.trim() && data?.id) {
+          fetch(`${API_BASE}/appointments/${data.id}/notes/`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: userNote.trim() }),
+          }).catch(() => {});
+        }
+        setUserNote('');
         onSuccess(data);
       } else {
         const data = await res.json();
@@ -228,6 +238,12 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
     return () => { mounted = false; };
   }, [open, category]);
 
+  // Reset note when dialog closes
+  useEffect(() => {
+    if (!open) (async () => { setUserNote(''); })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   return (
     <Dialog open={open} onClose={() => !loading && onClose()} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}>
       <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
@@ -256,15 +272,27 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
             })()}
           </Box>
         )}
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           You are joining the walk-in queue for <strong>{category?.name || category?.description}</strong>.
         </Typography>
+        {/* Optional note */}
+        <TextField
+          size="small"
+          multiline
+          minRows={2}
+          fullWidth
+          placeholder="Note for the staff (optional)"
+          value={userNote}
+          onChange={(e) => setUserNote(e.target.value.slice(0, 1000))}
+          inputProps={{ maxLength: 1000 }}
+          helperText={`${userNote.length}/1000`}
+          FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+        />
         {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
           <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>Cancel</Button>
-        {/* If server reports a duplicate appointment error, hide the Confirm button to
-            prevent repeated submissions. Use a case-insensitive match for 'already exist'. */}
         {!(error && /already exist/i.test(error)) && (
           <Button onClick={handleBook} variant="contained" color="primary" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />} sx={{ borderRadius: 2 }}>{loading ? 'Booking…' : 'Confirm'}</Button>
         )}
@@ -388,13 +416,21 @@ export default function OrgBookingPage() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
-  <Box sx={{ background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)', color: '#fff', pt: isMobile ? 4 : 5, pb: isMobile ? 5 : 6, px: isMobile ? 2.5 : 4, position: 'relative' }}>
+      {/* Hero banner */}
+      <Box sx={{
+        background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+        color: '#fff',
+        pt: isMobile ? 2.5 : 4,
+        pb: isMobile ? 3 : 4,
+        px: isMobile ? 2.5 : 4,
+        position: 'relative',
+      }}>
         {/* Top nav row — back button left, login button right when not signed in */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           {isLoggedIn ? (
             <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => navigate('/home')} sx={{ color: 'rgba(255,255,255,0.75)', textTransform: 'none', fontWeight: 500 }}>Home</Button>
           ) : (
-            <Box /> /* spacer so login button aligns right */
+            <Box />
           )}
           {!isLoggedIn && (
             <Button
@@ -407,22 +443,50 @@ export default function OrgBookingPage() {
             </Button>
           )}
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-          <Avatar sx={{ width: 52, height: 52, bgcolor: 'rgba(255,255,255,0.2)', fontSize: 22, fontWeight: 800 }}><BusinessOutlinedIcon sx={{ fontSize: 28 }} /></Avatar>
-          <Box>
-            <Typography variant="h5" fontWeight={900} sx={{ lineHeight: 1.2 }}>{org?.name}</Typography>
-            {org?.type && <Chip label={org.type} size="small" sx={{ mt: 0.5, height: 20, fontSize: 11, fontWeight: 600, bgcolor: (theme) => theme.palette.custom.mint, color: (theme) => theme.palette.custom.deepSlate }} />}
-          </Box>
+
+        {/* Avatar centered */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1.5 }}>
+          <Avatar
+            src={org?.display_picture_url || undefined}
+            sx={{
+              width: { xs: 64, sm: 72 },
+              height: { xs: 64, sm: 72 },
+              bgcolor: 'rgba(255,255,255,0.2)',
+              fontSize: 28,
+              fontWeight: 800,
+              border: '2px solid rgba(255,255,255,0.35)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            }}
+          >
+            {!org?.display_picture_url && <BusinessOutlinedIcon sx={{ fontSize: 30 }} />}
+          </Avatar>
         </Box>
-        {/* Address row — full address with Google Maps link */}
+
+        {/* Org name */}
+        <Typography variant="h5" fontWeight={900} align="center" sx={{ lineHeight: 1.2, mb: 0.5 }}>
+          {org?.name}
+        </Typography>
+
+        {/* Type chip */}
+        {org?.type && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+            <Chip
+              label={org.type}
+              size="small"
+              sx={{ height: 20, fontSize: 11, fontWeight: 600, bgcolor: (theme) => theme.palette.custom?.mint, color: (theme) => theme.palette.custom?.deepSlate }}
+            />
+          </Box>
+        )}
+
+        {/* Address row */}
         {(() => {
           const addrParts = [org?.address_line1, org?.address_line2, org?.pincode, org?.city, org?.state, org?.country].filter(Boolean);
           const url = mapsUrl(org);
           if (!addrParts.length) return null;
           return (
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mt: 1, opacity: 0.9 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mt: 0.5, opacity: 0.9, px: { xs: 0.5, sm: 1 } }}>
               <LocationOnOutlinedIcon sx={{ fontSize: 15, mt: '2px', flexShrink: 0 }} />
-              <Typography variant="body2" sx={{ flex: 1 }}>{addrParts.join(', ')}</Typography>
+              <Typography variant="body2" sx={{ flex: 1, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{addrParts.join(', ')}</Typography>
               {url && (
                 <Tooltip title="Open in Google Maps">
                   <Box
@@ -434,7 +498,7 @@ export default function OrgBookingPage() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      ml: 1,
+                      ml: 0.5,
                       flexShrink: 0,
                       bgcolor: '#e53935',
                       color: '#fff',
@@ -453,21 +517,26 @@ export default function OrgBookingPage() {
             </Box>
           );
         })()}
+
         {/* Phone number */}
         {org?.phone_number && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5, opacity: 0.9 }}>
-            <LocalPhoneOutlinedIcon sx={{ fontSize: 14 }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5, opacity: 0.9, px: { xs: 0.5, sm: 1 } }}>
+            <LocalPhoneOutlinedIcon sx={{ fontSize: 14, flexShrink: 0 }} />
             <Typography
               component="a"
               href={`tel:${org.phone_number}`}
               variant="body2"
-              sx={{ color: 'rgba(255,255,255,0.9)', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+              sx={{ color: 'rgba(255,255,255,0.9)', textDecoration: 'none', fontWeight: 600, '&:hover': { textDecoration: 'underline' } }}
             >
               {org.phone_number}
             </Typography>
           </Box>
         )}
-        {org?.portfolio_site && (<Typography variant="caption" component="a" href={org.portfolio_site} target="_blank" rel="noopener noreferrer" sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.75)', textDecoration: 'underline' }}>{org.portfolio_site}</Typography>)}
+
+        {org?.portfolio_site && (
+          <Typography variant="caption" component="a" href={org.portfolio_site} target="_blank" rel="noopener noreferrer" sx={{ display: 'block', mt: 0.75, color: 'rgba(255,255,255,0.75)', textDecoration: 'underline', px: { xs: 0.5, sm: 1 } }}>{org.portfolio_site}</Typography>
+        )}
+
         {!isLoggedIn && (
           <Paper
             onClick={() => openLogin({ from: window.location.pathname + window.location.search })}
