@@ -1116,6 +1116,13 @@ export default function AdminPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createFieldErrors, setCreateFieldErrors] = useState({});
+  // Refs for create form inputs so we can focus the first invalid field
+  const createNameRef = useRef(null);
+  const createDescriptionRef = useRef(null);
+  const createEstimatedRef = useRef(null);
+  const createPhoneRef = useRef(null);
+  const createAddress1Ref = useRef(null);
+  const createPincodeRef = useRef(null);
 
   const closeCreateDialog = () => {
     setCreateDialogOpen(false);
@@ -1132,6 +1139,11 @@ export default function AdminPage() {
   const [createUserLoading, setCreateUserLoading] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
   const [createUserFieldErrors, setCreateUserFieldErrors] = useState({});
+  // Refs for create/update category-admin user dialog
+  const createUserFirstNameRef = useRef(null);
+  const createUserEmailRef = useRef(null);
+  const createUserPhoneRef = useRef(null);
+  const createUserCategoryRef = useRef(null);
   const [categoryAdmins, setCategoryAdmins] = useState([]);
   const [editingUserId, setEditingUserId] = useState(null);
 
@@ -1151,6 +1163,16 @@ export default function AdminPage() {
   const [editCatLoading, setEditCatLoading] = useState(false);
   const [editCatError, setEditCatError] = useState('');
   const [editFieldErrors, setEditFieldErrors] = useState({});
+  // Refs for edit form inputs to focus on first invalid field after server validation
+  const editNameRef = useRef(null);
+  const editDescriptionRef = useRef(null);
+  const editEstimatedRef = useRef(null);
+  const editPhoneRef = useRef(null);
+  const editAddress1Ref = useRef(null);
+  const editPincodeRef = useRef(null);
+  const editMaxAdvanceRef = useRef(null);
+  const editMaxPerDayRef = useRef(null);
+  const editTimezoneRef = useRef(null);
 
   // unscheduled counts per category (for queue size display)
   const [unscheduledCounts, setUnscheduledCounts] = useState({});
@@ -1577,6 +1599,22 @@ export default function AdminPage() {
           if (Object.keys(fieldErrs).length > 0) {
             setCreateFieldErrors(fieldErrs);
             setCreateError('Please correct the highlighted fields.');
+            // Focus the first invalid create field (in a predictable order)
+            (function focusFirstCreateField() {
+              const order = ['name', 'description', 'estimated_time', 'address_line1', 'pincode', 'phone_number'];
+              for (const k of order) {
+                if (fieldErrs[k]) {
+                  try {
+                    if (k === 'name' && createNameRef.current) { createNameRef.current.focus(); return; }
+                    if (k === 'description' && createDescriptionRef.current) { createDescriptionRef.current.focus(); return; }
+                    if (k === 'estimated_time' && createEstimatedRef.current) { createEstimatedRef.current.focus(); return; }
+                    if (k === 'address_line1' && createAddress1Ref.current) { createAddress1Ref.current.focus(); return; }
+                    if (k === 'pincode' && createPincodeRef.current) { createPincodeRef.current.focus(); return; }
+                    if (k === 'phone_number' && createPhoneRef.current) { createPhoneRef.current.focus(); return; }
+                  } catch (_) { /* ignore focus failures */ }
+                }
+              }
+            })();
           } else {
             setCreateError(parseApiError(err, 'Failed to create category'));
           }
@@ -1696,6 +1734,25 @@ export default function AdminPage() {
         if (Object.keys(fieldErrs).length > 0) {
           setEditFieldErrors(fieldErrs);
           setEditCatError('Please correct the highlighted fields.');
+          // Focus the first invalid edit field
+          (function focusFirstEditField() {
+            const order = ['name', 'description', 'estimated_time', 'phone_number', 'address_line1', 'pincode', 'max_advance_days', 'max_scheduled_per_user_per_day', 'time_zone'];
+            for (const k of order) {
+              if (fieldErrs[k]) {
+                try {
+                  if (k === 'name' && editNameRef.current) { editNameRef.current.focus(); return; }
+                  if (k === 'description' && editDescriptionRef.current) { editDescriptionRef.current.focus(); return; }
+                  if (k === 'estimated_time' && editEstimatedRef.current) { editEstimatedRef.current.focus(); return; }
+                  if (k === 'phone_number' && editPhoneRef.current) { editPhoneRef.current.focus(); return; }
+                  if (k === 'address_line1' && editAddress1Ref.current) { editAddress1Ref.current.focus(); return; }
+                  if (k === 'pincode' && editPincodeRef.current) { editPincodeRef.current.focus(); return; }
+                  if (k === 'max_advance_days' && editMaxAdvanceRef.current) { editMaxAdvanceRef.current.focus(); return; }
+                  if (k === 'max_scheduled_per_user_per_day' && editMaxPerDayRef.current) { editMaxPerDayRef.current.focus(); return; }
+                  if (k === 'time_zone' && editTimezoneRef.current) { editTimezoneRef.current.focus(); return; }
+                } catch (_) { /* ignore focus failures */ }
+              }
+            }
+          })();
         } else {
           setEditCatError(parseApiError(err, 'Failed to update category'));
         }
@@ -1711,6 +1768,7 @@ export default function AdminPage() {
   // Create a category-scoped admin user for the current organization
   const handleCreateCategoryUser = async () => {
     setCreateUserError('');
+    setCreateUserFieldErrors({});
     setCreateUserLoading(true);
     try {
       // basic validation
@@ -1779,7 +1837,37 @@ export default function AdminPage() {
         const err = await res.json().catch(() => ({}));
         // eslint-disable-next-line no-console
         console.error('Create/update category user failed', res.status, err); // eslint-disable-line no-console
-        setCreateUserError(parseApiError(err, 'Failed to create/update user'));
+        // Check for field-level validation errors
+        const fieldErrs = {};
+        if (err && typeof err === 'object') {
+          const src = err.errors && typeof err.errors === 'object' ? err.errors : err;
+          for (const [k, v] of Object.entries(src)) {
+            if (typeof k === 'string') {
+              const msg = Array.isArray(v) ? v.join(' ') : String(v);
+              fieldErrs[k] = msg;
+            }
+          }
+        }
+        if (Object.keys(fieldErrs).length > 0) {
+          setCreateUserFieldErrors(fieldErrs);
+          setCreateUserError('Please correct the highlighted fields.');
+          // Focus first invalid create-user field
+          (function focusFirstCreateUserField() {
+            const order = ['first_name', 'email', 'phone', 'category_ids'];
+            for (const k of order) {
+              if (fieldErrs[k]) {
+                try {
+                  if (k === 'first_name' && createUserFirstNameRef.current) { createUserFirstNameRef.current.focus(); return; }
+                  if (k === 'email' && createUserEmailRef.current) { createUserEmailRef.current.focus(); return; }
+                  if (k === 'phone' && createUserPhoneRef.current) { createUserPhoneRef.current.focus(); return; }
+                  if (k === 'category_ids' && createUserCategoryRef.current) { if (createUserCategoryRef.current.focus) createUserCategoryRef.current.focus(); return; }
+                } catch (_) { /* ignore */ }
+              }
+            }
+          })();
+        } else {
+          setCreateUserError(parseApiError(err, 'Failed to create/update user'));
+        }
       }
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -2248,10 +2336,14 @@ export default function AdminPage() {
                     {createError && <Alert severity="error" sx={{ mb: 1 }}>{createError}</Alert>}
                     <TextField
                       fullWidth
+                      required
                       label="Name"
                       value={createForm.name}
                       onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
                       sx={{ mb: 2 }}
+                      error={Boolean(createFieldErrors.name)}
+                      helperText={createFieldErrors.name}
+                      inputRef={createNameRef}
                     />
                     <TextField
                       fullWidth
@@ -2259,6 +2351,9 @@ export default function AdminPage() {
                       value={createForm.description}
                       onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))}
                       sx={{ mb: 2 }}
+                      error={Boolean(createFieldErrors.description)}
+                      helperText={createFieldErrors.description}
+                      inputRef={createDescriptionRef}
                     />
                     <TextField
                       fullWidth
@@ -2271,6 +2366,7 @@ export default function AdminPage() {
                       helperText={createFieldErrors.estimated_time || 'Used to show estimated wait time in the walk-in queue (e.g. 15)'}
                       error={Boolean(createFieldErrors.estimated_time)}
                       sx={{ mb: 2 }}
+                      inputRef={createEstimatedRef}
                     />
                     <TextField
                       fullWidth
@@ -2278,8 +2374,10 @@ export default function AdminPage() {
                       label="Address line 1 (optional)"
                       value={createForm.address_line1}
                       onChange={(e) => setCreateForm((f) => ({ ...f, address_line1: e.target.value }))}
-                      helperText="Street address specific to this service location"
+                      helperText={createFieldErrors.address_line1 || 'Street address specific to this service location'}
+                      error={Boolean(createFieldErrors.address_line1)}
                       sx={{ mb: 2 }}
+                      inputRef={createAddress1Ref}
                     />
                     <TextField
                       fullWidth
@@ -2287,7 +2385,8 @@ export default function AdminPage() {
                       label="Address line 2 (optional)"
                       value={createForm.address_line2}
                       onChange={(e) => setCreateForm((f) => ({ ...f, address_line2: e.target.value }))}
-                      helperText="Floor, suite, landmark"
+                      helperText={createFieldErrors.address_line2 || 'Floor, suite, landmark'}
+                      error={Boolean(createFieldErrors.address_line2)}
                       sx={{ mb: 2 }}
                     />
                     <TextField
@@ -2296,8 +2395,10 @@ export default function AdminPage() {
                       label="Pincode / ZIP (optional)"
                       value={createForm.pincode}
                       onChange={(e) => setCreateForm((f) => ({ ...f, pincode: e.target.value }))}
-                      helperText="Postal / ZIP code"
+                      helperText={createFieldErrors.pincode || 'Postal / ZIP code'}
+                      error={Boolean(createFieldErrors.pincode)}
                       sx={{ mb: 2 }}
+                      inputRef={createPincodeRef}
                     />
                     <TextField
                       fullWidth
@@ -2305,8 +2406,10 @@ export default function AdminPage() {
                       label="Phone number (optional)"
                       value={createForm.phone_number}
                       onChange={(e) => setCreateForm((f) => ({ ...f, phone_number: e.target.value }))}
-                      helperText="E.164 format, e.g. +911234567890"
+                      helperText={createFieldErrors.phone_number || 'E.164 format, e.g. +911234567890'}
+                      error={Boolean(createFieldErrors.phone_number)}
                       sx={{ mb: 2 }}
+                      inputRef={createPhoneRef}
                     />
                     <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                       <InputLabel id="cat-type-label">Type</InputLabel>
@@ -2456,6 +2559,7 @@ export default function AdminPage() {
                                 fullWidth
                                 error={Boolean(createUserFieldErrors.first_name)}
                                 helperText={createUserFieldErrors.first_name}
+                                inputRef={createUserFirstNameRef}
                               />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2479,6 +2583,7 @@ export default function AdminPage() {
                             fullWidth
                             error={Boolean(createUserFieldErrors.email)}
                             helperText={createUserFieldErrors.email}
+                            inputRef={createUserEmailRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2490,6 +2595,7 @@ export default function AdminPage() {
                             fullWidth
                             error={Boolean(createUserFieldErrors.phone)}
                             helperText={createUserFieldErrors.phone || 'Include country code or use +prefix (optional)'}
+                            inputRef={createUserPhoneRef}
                             InputProps={{
                               startAdornment: (
                                 <InputAdornment position="start" sx={{ mr: 1 }}>
@@ -2516,6 +2622,7 @@ export default function AdminPage() {
                               value={createUserForm.category_ids || []}
                               label="Category"
                               onChange={(e) => setCreateUserForm((f) => ({ ...f, category_ids: e.target.value }))}
+                              inputRef={createUserCategoryRef}
                               renderValue={(selected) => {
                                 if (!selected || selected.length === 0) return 'Select categories';
                                 const selIds = (selected || []).map((s) => (typeof s === 'string' && s.match(/^\d+$/) ? parseInt(s, 10) : s));
@@ -2579,6 +2686,9 @@ export default function AdminPage() {
                             value={editCatForm.name}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, name: e.target.value }))}
                             fullWidth
+                            error={Boolean(editFieldErrors.name)}
+                            helperText={editFieldErrors.name}
+                            inputRef={editNameRef}
                           />
                         </Grid>
                         <Grid item xs={12}>
@@ -2588,6 +2698,9 @@ export default function AdminPage() {
                             value={editCatForm.description}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, description: e.target.value }))}
                             fullWidth
+                            error={Boolean(editFieldErrors.description)}
+                            helperText={editFieldErrors.description}
+                            inputRef={editDescriptionRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2601,6 +2714,7 @@ export default function AdminPage() {
                             helperText={editFieldErrors.estimated_time || 'Walk-in wait estimate in minutes'}
                             error={Boolean(editFieldErrors.estimated_time)}
                             fullWidth
+                            inputRef={editEstimatedRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2609,8 +2723,10 @@ export default function AdminPage() {
                             label="Phone (optional)"
                             value={editCatForm.phone_number}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, phone_number: e.target.value }))}
-                            helperText="E.164, e.g. +911234567890"
+                            helperText={editFieldErrors.phone_number || 'E.164, e.g. +911234567890'}
+                            error={Boolean(editFieldErrors.phone_number)}
                             fullWidth
+                            inputRef={editPhoneRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2620,6 +2736,9 @@ export default function AdminPage() {
                             value={editCatForm.address_line1}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, address_line1: e.target.value }))}
                             fullWidth
+                            helperText={editFieldErrors.address_line1}
+                            error={Boolean(editFieldErrors.address_line1)}
+                            inputRef={editAddress1Ref}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2629,6 +2748,8 @@ export default function AdminPage() {
                             value={editCatForm.address_line2}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, address_line2: e.target.value }))}
                             fullWidth
+                            helperText={editFieldErrors.address_line2}
+                            error={Boolean(editFieldErrors.address_line2)}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2638,6 +2759,9 @@ export default function AdminPage() {
                             value={editCatForm.pincode}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, pincode: e.target.value }))}
                             fullWidth
+                            helperText={editFieldErrors.pincode}
+                            error={Boolean(editFieldErrors.pincode)}
+                            inputRef={editPincodeRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2648,8 +2772,10 @@ export default function AdminPage() {
                             inputProps={{ min: 1 }}
                             value={editCatForm.max_advance_days}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, max_advance_days: e.target.value }))}
-                            helperText="How many days ahead users can book"
+                            helperText={editFieldErrors.max_advance_days || 'How many days ahead users can book'}
+                            error={Boolean(editFieldErrors.max_advance_days)}
                             fullWidth
+                            inputRef={editMaxAdvanceRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2660,8 +2786,10 @@ export default function AdminPage() {
                             inputProps={{ min: 1 }}
                             value={editCatForm.max_scheduled_per_user_per_day}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, max_scheduled_per_user_per_day: e.target.value }))}
-                            helperText="Leave blank for unlimited"
+                            helperText={editFieldErrors.max_scheduled_per_user_per_day || 'Leave blank for unlimited'}
+                            error={Boolean(editFieldErrors.max_scheduled_per_user_per_day)}
                             fullWidth
+                            inputRef={editMaxPerDayRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2670,8 +2798,10 @@ export default function AdminPage() {
                             label="Timezone"
                             value={editCatForm.time_zone}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, time_zone: e.target.value }))}
-                            helperText="e.g. Asia/Kolkata, America/New_York"
+                            helperText={editFieldErrors.time_zone || 'e.g. Asia/Kolkata, America/New_York'}
+                            error={Boolean(editFieldErrors.time_zone)}
                             fullWidth
+                            inputRef={editTimezoneRef}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>

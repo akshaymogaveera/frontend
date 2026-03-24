@@ -41,6 +41,7 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import MapIcon from '@mui/icons-material/Map';
 import PhoneIcon from '@mui/icons-material/Phone';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { timeOnly, formatDateTime, formatDate, formatServerDateTime } from '../utils/timezone.js';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -224,6 +225,15 @@ function OrgCard({ org, onClick }) {
                   </Typography>
                 </Box>
               )}
+            </Box>
+          )}
+
+          {org.portfolio_site && (
+            <Box sx={{ mt: 1 }}>
+              <Box component="a" href={org.portfolio_site} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, textDecoration: 'none' }}>
+                <OpenInNewIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                <Typography variant="caption" sx={{ textDecoration: 'underline', color: 'text.secondary', display: 'block' }}>{org.portfolio_site}</Typography>
+              </Box>
             </Box>
           )}
         </CardContent>

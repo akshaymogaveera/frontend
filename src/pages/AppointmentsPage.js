@@ -509,13 +509,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             label="Service / Category"
             value={appt.category_name || `Category #${appt.category}`}
           />
-          {appt.category_description && appt.category_description !== appt.category_name && (
-            <DetailRow
-              icon={<CategoryOutlinedIcon sx={{ opacity: 0.4 }} />}
-              label="Description"
-              value={appt.category_description}
-            />
-          )}
+          {/* Description removed per UX: do not show category description in appointment details */}
           {(() => {
             const displayName =
               `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() ||

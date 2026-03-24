@@ -103,6 +103,17 @@ export default function BookingConfirmDialog({
               {result?.estimated_time && (
                 <Typography variant="body2" color="text.secondary"><strong>Estimated wait:</strong> {result.estimated_time}</Typography>
               )}
+              {/* Show category info (name + optional description) when available */}
+              {(result?.category_name || result?.category_description) && (
+                <Box sx={{ mt: 1 }}>
+                  {result?.category_name && (
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{result.category_name}</Typography>
+                  )}
+                  {result?.category_description && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{result.category_description}</Typography>
+                  )}
+                </Box>
+              )}
             </Box>
           </Box>
         )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ENDPOINTS, apiCall } from '../utils/api.js';
 import {
   Box,
@@ -35,6 +35,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import MapIcon from '@mui/icons-material/Map';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import LocalPhoneOutlinedIcon from '@mui/icons-material/LocalPhoneOutlined';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import AddIcon from '@mui/icons-material/Add';
@@ -478,7 +479,8 @@ export default function OrgBookingPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [org, setOrg] = useState(null);
+  const location = useLocation();
+  const [org, setOrg] = useState(() => (location?.state?.preSelectOrg ? location.state.preSelectOrg : null));
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -490,7 +492,6 @@ export default function OrgBookingPage() {
   const [createdApptErrorOpen, setCreatedApptErrorOpen] = useState(false);
 
   // (removed unused cancel handler)
-
   const isLoggedIn = Boolean(localStorage.getItem('accessToken'));
   const { openLogin } = useLoginModal();
 
@@ -572,7 +573,15 @@ export default function OrgBookingPage() {
     // appt is the created appointment object returned by the API.
     // Do NOT close the SchedulerDialog here — it shows its own success screen.
     // The BookingConfirmDialog will open when the user explicitly closes the scheduler.
+    // Close any in-place selection dialog for unscheduled categories so the
+    // shared BookingConfirmDialog does not overlap the old modal.
+    if (!selectedCat || !selectedCat.is_scheduled) {
+      setSelectedCat(null);
+    }
+    // Show the shared booking confirmation dialog so the user sees success
+    // feedback immediately after creating an appointment from this page.
     setCreatedAppt(appt || null);
+    setCreatedApptOpen(true);
   };
 
   const handleBookError = (errorMsg) => {
@@ -803,22 +812,12 @@ export default function OrgBookingPage() {
         )}
 
         {org?.portfolio_site && (
-          <Typography
-            variant="caption"
-            component="a"
-            href={org.portfolio_site}
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{
-              display: 'block',
-              mt: 0.75,
-              color: 'rgba(255,255,255,0.75)',
-              textDecoration: 'underline',
-              px: { xs: 0.5, sm: 1 },
-            }}
-          >
-            {org.portfolio_site}
-          </Typography>
+          <Box sx={{ mt: 0.75, px: { xs: 0.5, sm: 1 } }}>
+            <Box component="a" href={org.portfolio_site} target="_blank" rel="noopener noreferrer" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'rgba(255,255,255,0.85)', textDecoration: 'none' }}>
+              <OpenInNewIcon sx={{ fontSize: 14, color: 'rgba(255,255,255,0.85)' }} />
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)', textDecoration: 'underline' }}>{org.portfolio_site}</Typography>
+            </Box>
+          </Box>
         )}
 
         {!isLoggedIn && (
