@@ -107,8 +107,10 @@ export default function BookingConfirmDialog({
           </Box>
         )}
         {status === 'error' && (
-          <Box>
-            <Typography variant="body2" color="error.main">{error || 'Booking failed.'}</Typography>
+          <Box sx={{ textAlign: 'center', py: 1 }}>
+            <Typography variant="body2" color="error.main" sx={{ fontWeight: 500 }}>
+              {error || 'Booking failed.'}
+            </Typography>
           </Box>
         )}
       </DialogContent>

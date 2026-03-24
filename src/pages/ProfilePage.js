@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, TextField, Button, Typography, Paper, CircularProgress, Alert } from '@mui/material';
+import { ENDPOINTS, apiCall } from '../utils/api.js';
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -11,7 +12,13 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', city: '', country: '' });
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    city: '',
+    country: '',
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -19,8 +26,7 @@ function ProfilePage() {
       navigate('/login');
       return;
     }
-    fetch('/api/me/', { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.ok ? r.json() : Promise.reject(r))
+    apiCall(ENDPOINTS.ME)
       .then((data) => {
         setForm({
           first_name: data.first_name || '',
@@ -30,13 +36,8 @@ function ProfilePage() {
           country: data.country || '',
         });
       })
-      .catch(async (e) => {
-        try {
-          const txt = await (e.text ? e.text() : Promise.resolve(''));
-          console.error('Failed to fetch /api/me/', txt || e);
-        } catch (err) {
-          console.error(err);
-        }
+      .catch((err) => {
+        console.error('Failed to load profile:', err);
         setError('Failed to load profile');
       })
       .finally(() => setLoading(false));
@@ -48,11 +49,10 @@ function ProfilePage() {
     setSaving(true);
     setError('');
     setSuccess('');
-    const token = localStorage.getItem('accessToken');
     try {
-      const res = await fetch('/api/me/', {
+      const data = await apiCall(ENDPOINTS.ME, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           first_name: form.first_name,
           last_name: form.last_name,
@@ -61,13 +61,6 @@ function ProfilePage() {
           country: form.country,
         }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError((body && body.message) || (body && JSON.stringify(body.errors)) || 'Save failed');
-        setSaving(false);
-        return;
-      }
-      const data = await res.json();
       // persist readable name for navbar
       localStorage.setItem('firstName', data.first_name || '');
       localStorage.setItem('lastName', data.last_name || '');
@@ -77,30 +70,55 @@ function ProfilePage() {
       setSuccess('Profile updated');
     } catch (err) {
       console.error(err);
-      setError('Failed to save profile');
+      setError(err.message || 'Failed to save profile');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
+  if (loading)
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
 
   return (
     <Box sx={{ maxWidth: 760, mx: 'auto', p: 2 }}>
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 2 }}>Update profile</Typography>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+        <Typography variant="h5" sx={{ mb: 2 }}>
+          Update profile
+        </Typography>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            {success}
+          </Alert>
+        )}
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-          <TextField label="First name" value={form.first_name} onChange={handleChange('first_name')} />
-          <TextField label="Last name" value={form.last_name} onChange={handleChange('last_name')} />
+          <TextField
+            label="First name"
+            value={form.first_name}
+            onChange={handleChange('first_name')}
+          />
+          <TextField
+            label="Last name"
+            value={form.last_name}
+            onChange={handleChange('last_name')}
+          />
           <TextField label="Email" value={form.email} onChange={handleChange('email')} />
           {/* Phone intentionally hidden */}
         </Box>
 
         {showOptional && (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Optional details</Typography>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Optional details
+            </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               <TextField label="City" value={form.city} onChange={handleChange('city')} />
               <TextField label="Country" value={form.country} onChange={handleChange('country')} />
@@ -115,7 +133,9 @@ function ProfilePage() {
           <Button variant="contained" onClick={handleSubmit} disabled={saving}>
             {saving ? 'Saving…' : 'Save changes'}
           </Button>
-          <Button variant="outlined" onClick={() => navigate(-1)}>Cancel</Button>
+          <Button variant="outlined" onClick={() => navigate(-1)}>
+            Cancel
+          </Button>
         </Box>
       </Paper>
     </Box>

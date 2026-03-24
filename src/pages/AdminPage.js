@@ -58,11 +58,13 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import DeleteIcon from '@mui/icons-material/Delete';
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
 import NoteOutlinedIcon from '@mui/icons-material/NoteOutlined';
+import ConfirmDialog from '../components/ConfirmDialog.js';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DownloadIcon from '@mui/icons-material/Download';
 import Navbar from '../components/Navbar.js';
+import { ENDPOINTS, apiCall } from '../utils/api.js';
 
 const API_BASE = '/api';
 
@@ -139,14 +141,10 @@ function NotesPanel({ appt, token }) {
   apptIdRef.current = appt.id;
 
   const doFetch = React.useRef(async () => {
-    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
     setLoadingNotes(true);
     try {
-      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/`, { headers: hdrs });
-      if (res.ok) {
-        const data = await res.json();
-        setNotes(data);
-      }
+      const data = await apiCall(ENDPOINTS.APPOINTMENT_NOTES(apptIdRef.current));
+      setNotes(data);
     } catch (e) { /* ignore */ }
     setLoadingNotes(false);
   });
@@ -185,51 +183,37 @@ function NotesPanel({ appt, token }) {
     }
     setNoteError('');
     setSubmitting(true);
-    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
     try {
       const body = {
         content: noteText.trim(),
         ...(noteFile ? { file_data: noteFile.data, file_name: noteFile.name, file_mime: noteFile.mime } : {}),
       };
-      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/`, {
+      await apiCall(ENDPOINTS.APPOINTMENT_NOTES(apptIdRef.current), {
         method: 'POST',
-        headers: hdrs,
         body: JSON.stringify(body),
       });
-      if (res.ok) {
-        setNoteText('');
-        setNoteFile(null);
-        if (fileRef.current) fileRef.current.value = '';
-        await doFetch.current();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        setNoteError(parseApiError(err, 'Failed to add note'));
-      }
-    } catch {
-      setNoteError('Network error');
+      setNoteText('');
+      setNoteFile(null);
+      if (fileRef.current) fileRef.current.value = '';
+      await doFetch.current();
+    } catch (err) {
+      setNoteError(err.message || 'Failed to add note');
     }
     setSubmitting(false);
   };
 
   const handleDeleteNote = async (noteId) => {
     try {
-      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/${noteId}/`, {
+      await apiCall(ENDPOINTS.APPOINTMENT_NOTES(apptIdRef.current) + noteId + '/', {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
       });
-      if (res.ok || res.status === 204) {
-        setNotes((prev) => prev.filter((n) => n.id !== noteId));
-      }
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
     } catch { /* ignore */ }
   };
 
   const handleDownloadFile = async (noteId) => {
     try {
-      const res = await fetch(`${API_BASE_NOTES}/appointments/${apptIdRef.current}/notes/${noteId}/file/`, {
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
-      });
-      if (!res.ok) return;
-      const { file_data, file_name } = await res.json();
+      const { file_data, file_name } = await apiCall(ENDPOINTS.APPOINTMENT_NOTE_FILE(apptIdRef.current, noteId));
       if (!file_data) return;
       const a = document.createElement('a');
       a.href = file_data;
@@ -632,38 +616,68 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
     setLoading(true);
     setError('');
     try {
-      const endpoint = apptType === 'scheduled'
-        ? `${API_BASE}/appointments/scheduled/?category_id=${category.id}&status=${statusFilter}&page_size=100`
-        : `${API_BASE}/appointments/unscheduled/?category_id=${category.id}&status=${statusFilter}&page_size=100`;
-      const res = await fetch(endpoint, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        const appts = data.results || [];
-        setAppointments(appts);
-        // For scheduled appointment lists, derive distinct dates available for filtering
-        if (apptType === 'scheduled') {
-          try {
-            const dates = Array.from(new Set(
-              (appts || [])
-                .filter((a) => a.scheduled_time)
-                .map((a) => (typeof a.scheduled_time === 'string' ? a.scheduled_time.split('T')[0] : ''))
-                .filter(Boolean)
-            ));
-            // Sort ascending
-            dates.sort();
-            setAvailableDates(dates);
-          } catch (e) {
-            setAvailableDates([]);
-          }
-        } else {
+      let endpoint;
+      if (apptType === 'scheduled') {
+        endpoint = ENDPOINTS.APPOINTMENTS_SCHEDULED_LIST(100) + `&category_id=${category.id}&status=${statusFilter}`;
+      } else {
+        endpoint = ENDPOINTS.APPOINTMENTS_UNSCHEDULED_LIST(100) + `&category_id=${category.id}&status=${statusFilter}`;
+      }
+      const data = await apiCall(endpoint);
+      let appts = data.results || [];
+      
+      // Fetch all pages if there are more results
+      let nextUrl = data.next;
+      while (nextUrl) {
+        const pageData = await apiCall(nextUrl);
+        appts = appts.concat(pageData.results || []);
+        nextUrl = pageData.next;
+      }
+      
+      setAppointments(appts);
+      // For scheduled appointment lists, derive distinct dates available for filtering
+      if (apptType === 'scheduled') {
+        try {
+          const dates = Array.from(new Set(
+            (appts || [])
+              .filter((a) => a.scheduled_time)
+              .map((a) => (typeof a.scheduled_time === 'string' ? a.scheduled_time.split('T')[0] : ''))
+              .filter(Boolean)
+          ));
+          // Sort ascending
+          dates.sort();
+          setAvailableDates(dates);
+        } catch (e) {
           setAvailableDates([]);
-          setDateFilter('all');
         }
       } else {
-        setError('Failed to load appointments.');
+        setAvailableDates([]);
+        setDateFilter('all');
       }
-    } catch {
-      setError('Network error.');
+    } catch (err) {
+      // Map certain backend validation errors to friendly UI guidance.
+      let friendly = err.message || 'Failed to load appointments.';
+      try {
+        const body = err.body || {};
+        const msg = (err.message || '').toLowerCase();
+        // If the API complains about category_id (invalid or inactive), show actionable guidance
+        if (body && (body.category_id || body.category || msg.includes('category_id') || msg.includes('one or more category ids are invalid') || msg.includes('invalid category'))) {
+          friendly = 'This category appears inactive or invalid. Turn the category to Active to view appointments.';
+        }
+      } catch (e) {
+        // ignore
+      }
+      // If this is a category-related error, clear the appointments list in the UI
+      try {
+        const body = err.body || {};
+        const msg = (err.message || '').toLowerCase();
+        if (body && (body.category_id || body.category || msg.includes('category_id') || msg.includes('one or more category ids are invalid') || msg.includes('invalid category'))) {
+          setAppointments([]);
+          setAvailableDates([]);
+        }
+      } catch (e) {
+        // ignore
+      }
+      setError(friendly);
     }
     setLoading(false);
   }, [category.id, apptType, statusFilter, token]);
@@ -724,72 +738,70 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
   const handleAction = async (action, appt, index) => {
     setActionLoading(true);
     try {
-      let res;
       if (action === 'checkin') {
-        res = await fetch(`${API_BASE}/appointments/${appt.id}/check-in/`, {
-          method: 'POST', headers: authHeaders,
+        await apiCall(ENDPOINTS.APPOINTMENT_CHECKIN(appt.id), {
+          method: 'POST',
         });
       } else if (action === 'checkout') {
         // Use dedicated checkout endpoint — records checkout_time, no counter adjustment
-        res = await fetch(`${API_BASE}/appointments/${appt.id}/checkout/`, {
-          method: 'POST', headers: authHeaders,
+        await apiCall(ENDPOINTS.APPOINTMENT_CHECKOUT(appt.id), {
+          method: 'POST',
         });
       } else if (action === 'cancel') {
-        res = await fetch(`${API_BASE}/appointments/${appt.id}/cancel/`, {
-          method: 'POST', headers: authHeaders,
+        await apiCall(ENDPOINTS.APPOINTMENT_CANCEL(appt.id), {
+          method: 'POST',
         });
       } else if (action === 'move-up') {
         const previous = index >= 2 ? appointments[index - 2] : null;
-        res = await fetch(`${API_BASE}/appointments/${appt.id}/move/`, {
+        await apiCall(ENDPOINTS.APPOINTMENT_MOVE(appt.id), {
           method: 'POST',
-          headers: authHeaders,
           body: JSON.stringify({ previous_appointment_id: previous ? previous.id : null }),
         });
       } else if (action === 'move-down') {
         const previous = appointments[index + 1];
-        res = await fetch(`${API_BASE}/appointments/${appt.id}/move/`, {
+        await apiCall(ENDPOINTS.APPOINTMENT_MOVE(appt.id), {
           method: 'POST',
-          headers: authHeaders,
           body: JSON.stringify({ previous_appointment_id: previous ? previous.id : null }),
         });
       }
-      if (res && res.ok) {
-        if (action === 'move-up' || action === 'move-down') {
-          // Capture previous bounding rects
-          const prevRects = {};
-          (appointments || []).forEach((a) => {
-            const el = itemRefs.current && itemRefs.current[a.id];
-            if (el && el.getBoundingClientRect) prevRects[a.id] = el.getBoundingClientRect();
-          });
+      
+      // Handle move animations
+      if (action === 'move-up' || action === 'move-down') {
+        // Capture previous bounding rects
+        const prevRects = {};
+        (appointments || []).forEach((a) => {
+          const el = itemRefs.current && itemRefs.current[a.id];
+          if (el && el.getBoundingClientRect) prevRects[a.id] = el.getBoundingClientRect();
+        });
 
-          // Determine the visible neighbor to swap with (respecting filters)
-          const visibleIds = (filteredAppointments || []).map((a) => a.id);
-          const visIdx = visibleIds.indexOf(appt.id);
-          let targetId = null;
-          if (action === 'move-up' && visIdx > 0) targetId = visibleIds[visIdx - 1];
-          if (action === 'move-down' && visIdx >= 0 && visIdx < visibleIds.length - 1) targetId = visibleIds[visIdx + 1];
+        // Determine the visible neighbor to swap with (respecting filters)
+        const visibleIds = (filteredAppointments || []).map((a) => a.id);
+        const visIdx = visibleIds.indexOf(appt.id);
+        let targetId = null;
+        if (action === 'move-up' && visIdx > 0) targetId = visibleIds[visIdx - 1];
+        if (action === 'move-down' && visIdx >= 0 && visIdx < visibleIds.length - 1) targetId = visibleIds[visIdx + 1];
 
-          if (targetId) {
-            const nextOrder = (appointments || []).slice();
-            const idxCurr = nextOrder.findIndex((x) => x.id === appt.id);
-            const idxTarget = nextOrder.findIndex((x) => x.id === targetId);
-            if (idxCurr !== -1 && idxTarget !== -1) {
-              [nextOrder[idxCurr], nextOrder[idxTarget]] = [nextOrder[idxTarget], nextOrder[idxCurr]];
-              // Apply updated order immediately
-              setAppointments(nextOrder);
+        if (targetId) {
+          const nextOrder = (appointments || []).slice();
+          const idxCurr = nextOrder.findIndex((x) => x.id === appt.id);
+          const idxTarget = nextOrder.findIndex((x) => x.id === targetId);
+          if (idxCurr !== -1 && idxTarget !== -1) {
+            [nextOrder[idxCurr], nextOrder[idxTarget]] = [nextOrder[idxTarget], nextOrder[idxCurr]];
+            // Apply updated order immediately
+            setAppointments(nextOrder);
 
-              // After render, animate from old -> new positions
-              requestAnimationFrame(() => {
-                Object.keys(prevRects).forEach((id) => {
-                  const el = itemRefs.current && itemRefs.current[id];
-                  if (!el) return;
-                  const prev = prevRects[id];
-                  const now = el.getBoundingClientRect();
-                  const dy = prev.top - now.top;
-                  if (dy) {
-                    const dx = dy > 0 ? 6 : -6;
-                    el.style.transform = `translateY(${dy}px) translateX(${dx}px)`;
-                    el.style.opacity = '0.92';
+            // After render, animate from old -> new positions
+            requestAnimationFrame(() => {
+              Object.keys(prevRects).forEach((id) => {
+                const el = itemRefs.current && itemRefs.current[id];
+                if (!el) return;
+                const prev = prevRects[id];
+                const now = el.getBoundingClientRect();
+                const dy = prev.top - now.top;
+                if (dy) {
+                  const dx = dy > 0 ? 6 : -6;
+                  el.style.transform = `translateY(${dy}px) translateX(${dx}px)`;
+                  el.style.opacity = '0.92';
                     el.getBoundingClientRect();
                     el.style.transition = 'transform 420ms cubic-bezier(0.22,1,0.36,1), opacity 420ms ease';
                     requestAnimationFrame(() => {
@@ -838,12 +850,8 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
 
           showToast(toastMsg);
         }
-      } else if (res) {
-        const err = await res.json().catch(() => ({}));
-        showToast(parseApiError(err, 'Action failed'), 'error');
-      }
-    } catch {
-      showToast('Network error', 'error');
+    } catch (err) {
+      showToast(err.message || 'Action failed', 'error');
     }
     setActionLoading(false);
   };
@@ -1092,6 +1100,11 @@ export default function AdminPage() {
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
   const [refreshCategoriesKey, setRefreshCategoriesKey] = useState(0);
 
+  // Delete confirmation dialog state (replace native confirm)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Create category dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const makeEmptyHours = () => {
@@ -1102,11 +1115,13 @@ export default function AdminPage() {
   const [createForm, setCreateForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [createFieldErrors, setCreateFieldErrors] = useState({});
 
   const closeCreateDialog = () => {
     setCreateDialogOpen(false);
     setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() });
     setCreateError('');
+    setCreateFieldErrors({});
     setCreateLoading(false);
     setCreateDayErrors({});
   };
@@ -1116,6 +1131,7 @@ export default function AdminPage() {
   const [createUserForm, setCreateUserForm] = useState({ first_name: '', last_name: '', email: '', phone: '', category_ids: [] });
   const [createUserLoading, setCreateUserLoading] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
+  const [createUserFieldErrors, setCreateUserFieldErrors] = useState({});
   const [categoryAdmins, setCategoryAdmins] = useState([]);
   const [editingUserId, setEditingUserId] = useState(null);
 
@@ -1125,6 +1141,7 @@ export default function AdminPage() {
     setCreateUserError('');
     setCreateUserLoading(false);
     setEditingUserId(null);
+    setCreateUserFieldErrors({});
   };
 
   // Edit category dialog state
@@ -1133,6 +1150,7 @@ export default function AdminPage() {
   const [editCatForm, setEditCatForm] = useState({ name: '', description: '', type: 'general', is_scheduled: false, time_interval_per_appointment: 15, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', max_advance_days: 7, max_scheduled_per_user_per_day: '', time_zone: 'UTC', opening_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(), break_hours: (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })() });
   const [editCatLoading, setEditCatLoading] = useState(false);
   const [editCatError, setEditCatError] = useState('');
+  const [editFieldErrors, setEditFieldErrors] = useState({});
 
   // unscheduled counts per category (for queue size display)
   const [unscheduledCounts, setUnscheduledCounts] = useState({});
@@ -1545,7 +1563,23 @@ export default function AdminPage() {
       } else {
           const err = await res.json().catch(() => ({}));
           console.error('Create category failed', res.status, err); // eslint-disable-line no-console
-          setCreateError(parseApiError(err, 'Failed to create category'));
+          // If the API returned field-level validation errors, attach them to the form
+          const fieldErrs = {};
+          if (err && typeof err === 'object') {
+            const src = err.errors && typeof err.errors === 'object' ? err.errors : err;
+            for (const [k, v] of Object.entries(src)) {
+              if (typeof k === 'string') {
+                const msg = Array.isArray(v) ? v.join(' ') : String(v);
+                fieldErrs[k] = msg;
+              }
+            }
+          }
+          if (Object.keys(fieldErrs).length > 0) {
+            setCreateFieldErrors(fieldErrs);
+            setCreateError('Please correct the highlighted fields.');
+          } else {
+            setCreateError(parseApiError(err, 'Failed to create category'));
+          }
       }
     } catch (e) {
         // eslint-disable-next-line no-console
@@ -1593,6 +1627,7 @@ export default function AdminPage() {
       break_hours: cat.break_hours || (function(){ const o={}; DAYS_OF_WEEK.forEach(d=>o[d]=[]); return o; })(),
     });
     setEditCatError('');
+    setEditFieldErrors({});
     setEditDayErrors({});
     setEditCatDialogOpen(true);
   };
@@ -1647,7 +1682,23 @@ export default function AdminPage() {
         const err = await res.json().catch(() => ({}));
         // eslint-disable-next-line no-console
         console.error('Edit category failed', res.status, err); // eslint-disable-line no-console
-        setEditCatError(parseApiError(err, 'Failed to update category'));
+        // Handle field-level validation errors specially so fields can show helperText
+        const fieldErrs = {};
+        if (err && typeof err === 'object') {
+          const src = err.errors && typeof err.errors === 'object' ? err.errors : err;
+          for (const [k, v] of Object.entries(src)) {
+            if (typeof k === 'string') {
+              const msg = Array.isArray(v) ? v.join(' ') : String(v);
+              fieldErrs[k] = msg;
+            }
+          }
+        }
+        if (Object.keys(fieldErrs).length > 0) {
+          setEditFieldErrors(fieldErrs);
+          setEditCatError('Please correct the highlighted fields.');
+        } else {
+          setEditCatError(parseApiError(err, 'Failed to update category'));
+        }
       }
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -1783,10 +1834,18 @@ export default function AdminPage() {
   };
 
   const handleDeleteCategoryUser = async (userId) => {
+    // Open app-styled confirmation dialog instead of native confirm()
+    if (!userId) return;
+    setUserToDelete(userId);
+    setDeleteDialogOpen(true);
+  };
+
+  const performDeleteCategoryUser = async () => {
+    const userId = userToDelete;
     if (!userId) return;
     const orgId = currentOrg && currentOrg.id;
     if (!orgId) return;
-    if (!confirm('Delete this user? This action cannot be undone.')) return;
+    setDeleteLoading(true);
     try {
       const res = await fetch(`${API_BASE}/organizations/${orgId}/delete-category-user/`, {
         method: 'POST', headers: authHeaders, body: JSON.stringify({ user_id: userId }),
@@ -1795,10 +1854,14 @@ export default function AdminPage() {
         setToast({ open: true, msg: 'User deleted', severity: 'success' });
         setRefreshCategoriesKey((k) => k + 1);
         // refresh admins
-        const ares = await fetch(`${API_BASE}/organizations/${orgId}/admins/`, { headers: authHeaders });
-        if (ares.ok) {
-          const adata = await ares.json();
-          if (adata.admins) setCategoryAdmins(adata.admins || []);
+        try {
+          const ares = await fetch(`${API_BASE}/organizations/${orgId}/admins/`, { headers: authHeaders });
+          if (ares.ok) {
+            const adata = await ares.json();
+            if (adata.admins) setCategoryAdmins(adata.admins || []);
+          }
+        } catch (e) {
+          // ignore admin refresh errors
         }
       } else {
         const err = await res.json().catch(() => ({}));
@@ -1807,6 +1870,9 @@ export default function AdminPage() {
     } catch (e) {
       setToast({ open: true, msg: 'Network error', severity: 'error' });
     }
+    setDeleteLoading(false);
+    setDeleteDialogOpen(false);
+    setUserToDelete(null);
   };
 
   // Queue modal handlers
@@ -2122,7 +2188,7 @@ export default function AdminPage() {
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
                   {currentOrg && canManageOrg(currentOrg.id) && (
                     <>
-                      <Button variant="contained" size="small" onClick={() => { setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() }); setCreateError(''); setCreateDialogOpen(true); }} sx={{ borderRadius: 6, mr: 1 }}>
+                      <Button variant="contained" size="small" onClick={() => { setCreateForm({ name: '', description: '', type: 'general', is_scheduled: false, estimated_time: '', address_line1: '', address_line2: '', pincode: '', phone_number: '', opening_hours: makeEmptyHours(), break_hours: makeEmptyHours() }); setCreateError(''); setCreateFieldErrors({}); setCreateDialogOpen(true); }} sx={{ borderRadius: 6, mr: 1 }}>
                         + New Category
                       </Button>
                       {isOrgAdmin && (
@@ -2202,7 +2268,8 @@ export default function AdminPage() {
                       inputProps={{ min: 1 }}
                       value={createForm.estimated_time}
                       onChange={(e) => setCreateForm((f) => ({ ...f, estimated_time: e.target.value }))}
-                      helperText="Used to show estimated wait time in the walk-in queue (e.g. 15)"
+                      helperText={createFieldErrors.estimated_time || 'Used to show estimated wait time in the walk-in queue (e.g. 15)'}
+                      error={Boolean(createFieldErrors.estimated_time)}
                       sx={{ mb: 2 }}
                     />
                     <TextField
@@ -2380,14 +2447,16 @@ export default function AdminPage() {
                     <Box component="form" sx={{ mt: 1 }}>
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
-                          <TextField
-                            required
-                            size="small"
-                            label="First name"
-                            value={createUserForm.first_name}
-                            onChange={(e) => setCreateUserForm((f) => ({ ...f, first_name: e.target.value }))}
-                            fullWidth
-                          />
+                              <TextField
+                                required
+                                size="small"
+                                label="First name"
+                                value={createUserForm.first_name}
+                                onChange={(e) => setCreateUserForm((f) => ({ ...f, first_name: e.target.value }))}
+                                fullWidth
+                                error={Boolean(createUserFieldErrors.first_name)}
+                                helperText={createUserFieldErrors.first_name}
+                              />
                         </Grid>
                         <Grid item xs={12} sm={6}>
                           <TextField
@@ -2396,6 +2465,8 @@ export default function AdminPage() {
                             value={createUserForm.last_name}
                             onChange={(e) => setCreateUserForm((f) => ({ ...f, last_name: e.target.value }))}
                             fullWidth
+                            error={Boolean(createUserFieldErrors.last_name)}
+                            helperText={createUserFieldErrors.last_name}
                           />
                         </Grid>
 
@@ -2406,6 +2477,8 @@ export default function AdminPage() {
                             value={createUserForm.email}
                             onChange={(e) => setCreateUserForm((f) => ({ ...f, email: e.target.value }))}
                             fullWidth
+                            error={Boolean(createUserFieldErrors.email)}
+                            helperText={createUserFieldErrors.email}
                           />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -2415,7 +2488,8 @@ export default function AdminPage() {
                             value={createUserForm.phone}
                             onChange={(e) => setCreateUserForm((f) => ({ ...f, phone: e.target.value }))}
                             fullWidth
-                            helperText="Include country code or use +prefix (optional)"
+                            error={Boolean(createUserFieldErrors.phone)}
+                            helperText={createUserFieldErrors.phone || 'Include country code or use +prefix (optional)'}
                             InputProps={{
                               startAdornment: (
                                 <InputAdornment position="start" sx={{ mr: 1 }}>
@@ -2434,7 +2508,7 @@ export default function AdminPage() {
                         </Grid>
 
                         <Grid item xs={12}>
-                          <FormControl fullWidth size="small">
+                          <FormControl fullWidth size="small" error={Boolean(createUserFieldErrors.category_ids)}>
                             <InputLabel id="create-user-cat-label">Category</InputLabel>
                             <Select
                               labelId="create-user-cat-label"
@@ -2464,6 +2538,9 @@ export default function AdminPage() {
                                 </MenuItem>
                               ))}
                             </Select>
+                            {createUserFieldErrors.category_ids && (
+                              <FormHelperText error sx={{ mt: 0.5 }}>{createUserFieldErrors.category_ids}</FormHelperText>
+                            )}
                           </FormControl>
                         </Grid>
                       </Grid>
@@ -2488,7 +2565,7 @@ export default function AdminPage() {
                 </Dialog>
 
                 {/* Edit Category dialog */}
-                <Dialog open={editCatDialogOpen} onClose={() => setEditCatDialogOpen(false)} fullWidth maxWidth="sm">
+                <Dialog open={editCatDialogOpen} onClose={() => { setEditCatDialogOpen(false); setEditFieldErrors({}); setEditCatError(''); }} fullWidth maxWidth="sm">
                   <DialogTitle>Edit category</DialogTitle>
                   <DialogContent>
                     {editCatError && <Alert severity="error" sx={{ mb: 1 }}>{editCatError}</Alert>}
@@ -2521,7 +2598,8 @@ export default function AdminPage() {
                             inputProps={{ min: 1 }}
                             value={editCatForm.estimated_time}
                             onChange={(e) => setEditCatForm((f) => ({ ...f, estimated_time: e.target.value }))}
-                            helperText="Walk-in wait estimate in minutes"
+                            helperText={editFieldErrors.estimated_time || 'Walk-in wait estimate in minutes'}
+                            error={Boolean(editFieldErrors.estimated_time)}
                             fullWidth
                           />
                         </Grid>
@@ -2751,7 +2829,7 @@ export default function AdminPage() {
                     <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Categories</Typography>
                     <Stack spacing={1}>
                       {currentOrg.categories.map((cat) => (
-                        <Paper key={`org-cat-${cat.id}`} elevation={0} sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                        <Paper key={`org-cat-${cat.id}`} elevation={0} sx={{ p: 1.5, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
                           <Box>
                             <Typography variant="body1" fontWeight={700}>{cat.name || cat.description || `Category #${cat.id}`}</Typography>
                             <Typography variant="caption" color="text.secondary">Type: {cat.type || 'general'} {cat.is_scheduled ? ' • Scheduled' : ''}</Typography>
@@ -3146,6 +3224,16 @@ export default function AdminPage() {
         </DialogActions>
       </Dialog>
       </Box>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete user?"
+        message="Delete this user? This action cannot be undone."
+        onClose={() => { setDeleteDialogOpen(false); setUserToDelete(null); }}
+        onConfirm={performDeleteCategoryUser}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        loading={deleteLoading}
+      />
     </AdminErrorBoundary>
   );
 }

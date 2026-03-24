@@ -1,8 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 // import { formatToCategoryTimezone } from '../utils/timezone.js';
 import { useNavigate } from 'react-router-dom';
-import { timeOnly, formatDateTime, formatDate, formatDateTimeLocal, formatDateLocal, formatServerDateTime } from '../utils/timezone.js';
+import {
+  timeOnly,
+  formatDateTime,
+  formatDate,
+  formatDateTimeLocal,
+  formatDateLocal,
+  formatServerDateTime,
+} from '../utils/timezone.js';
+import { ENDPOINTS, apiCall } from '../utils/api.js';
 import {
   Box,
   Typography,
@@ -54,28 +62,31 @@ import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
 import DownloadIcon from '@mui/icons-material/Download';
 import Navbar from '../components/Navbar.js';
 
-const API_BASE = '/api';
-
 const statusConfig = {
-  active:   { label: 'Active',      color: 'success', bg: '#e8f5e9', text: '#2e7d32' },
-  inactive: { label: 'Inactive',    color: 'default', bg: '#f5f5f5', text: '#616161' },
-  checkin:  { label: 'Checked In',  color: 'info',    bg: '#e3f2fd', text: '#1565c0' },
+  active: { label: 'Active', color: 'success', bg: '#e8f5e9', text: '#2e7d32' },
+  inactive: { label: 'Inactive', color: 'default', bg: '#f5f5f5', text: '#616161' },
+  checkin: { label: 'Checked In', color: 'info', bg: '#e3f2fd', text: '#1565c0' },
   checkout: { label: 'Checked Out', color: 'default', bg: '#ede7f6', text: '#4527a0' },
-  cancel:   { label: 'Cancelled',   color: 'error',   bg: '#fce4ec', text: '#c62828' },
+  cancel: { label: 'Cancelled', color: 'error', bg: '#fce4ec', text: '#c62828' },
 };
 
 const borderColor = {
-  active:   '#2e7d32',
+  active: '#2e7d32',
   inactive: '#bdbdbd',
-  checkin:  '#1565c0',
+  checkin: '#1565c0',
   checkout: '#4527a0',
-  cancel:   '#c62828',
+  cancel: '#c62828',
 };
 
 function AppointmentRow({ appt, onClick }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const cfg = statusConfig[appt.status] || { label: appt.status, color: 'default', bg: '#f5f5f5', text: '#333' };
+  const cfg = statusConfig[appt.status] || {
+    label: appt.status,
+    color: 'default',
+    bg: '#f5f5f5',
+    text: '#333',
+  };
 
   return (
     <ListItemButton
@@ -87,7 +98,10 @@ function AppointmentRow({ appt, onClick }) {
         borderColor: 'divider',
         borderLeft: `5px solid ${borderColor[appt.status] || '#bdbdbd'}`,
         bgcolor: 'background.paper',
-  '&:hover': { bgcolor: (theme) => theme.palette.custom ? theme.palette.custom.mint : '#E0F7F9', borderColor: 'primary.light' },
+        '&:hover': {
+          bgcolor: (theme) => (theme.palette.custom ? theme.palette.custom.mint : '#E0F7F9'),
+          borderColor: 'primary.light',
+        },
         py: isMobile ? 2 : 1.5,
         px: 2,
         gap: 0,
@@ -102,9 +116,12 @@ function AppointmentRow({ appt, onClick }) {
           fontSize: isMobile ? 16 : 13,
           fontWeight: 900,
           mr: 2,
-          background: (theme) => appt.status === 'active' || appt.status === 'checkin'
-            ? (theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)')
-            : 'rgba(0,0,0,0.1)',
+          background: (theme) =>
+            appt.status === 'active' || appt.status === 'checkin'
+              ? theme.palette.custom
+                ? theme.palette.custom.gradientPrimary
+                : 'var(--gradient-primary)'
+              : 'rgba(0,0,0,0.1)',
           color: ['active', 'checkin'].includes(appt.status) ? '#fff' : '#666',
           flexShrink: 0,
           boxShadow: appt.status === 'active' ? '0 2px 8px rgba(0,123,255,0.18)' : 'none',
@@ -116,44 +133,91 @@ function AppointmentRow({ appt, onClick }) {
       {/* Main info */}
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Typography variant="body1" fontWeight={700} noWrap sx={{ maxWidth: isMobile ? 180 : 220 }}>
+          <Typography
+            variant="body1"
+            fontWeight={700}
+            noWrap
+            sx={{ maxWidth: isMobile ? 180 : 220 }}
+          >
             {appt.organization_name || `Org #${appt.organization}`}
           </Typography>
           {appt.status && (
             <Chip
               label={cfg.label}
               size="small"
-              sx={{ fontWeight: 700, fontSize: 11, height: 20, bgcolor: cfg.bg, color: cfg.text, border: 'none' }}
+              sx={{
+                fontWeight: 700,
+                fontSize: 11,
+                height: 20,
+                bgcolor: cfg.bg,
+                color: cfg.text,
+                border: 'none',
+              }}
             />
           )}
         </Box>
         <Typography variant="body2" color="text.secondary" noWrap>
           {appt.category_name || `Category #${appt.category}`}
           {appt.is_scheduled && appt.scheduled_time
-          ? ` · 📅 ${appt.scheduled_time_display
-              ? appt.scheduled_time_display
-              : appt.scheduled_time_with_category_tz
-              ? appt.scheduled_time_with_category_tz
-              : formatServerDateTime(appt.scheduled_time)}`
+            ? ` · 📅 ${
+                appt.scheduled_time_display
+                  ? appt.scheduled_time_display
+                  : appt.scheduled_time_with_category_tz
+                    ? appt.scheduled_time_with_category_tz
+                    : formatServerDateTime(appt.scheduled_time)
+              }`
             : ' · 🚶 Walk-in'}
         </Typography>
         {/* Estimated wait time for walk-in appointments - only show if active */}
-        {appt.status === 'active' && !appt.is_scheduled && appt.counter != null && appt.counter > 0 && appt.category_estimated_time > 0 && (
-          <Typography variant="caption" sx={{ color: 'warning.dark', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            ⏱ ~{(() => {
-              const mins = (appt.counter - 1) * appt.category_estimated_time;
-              if (mins <= 0) return 'your turn soon';
-              if (mins >= 60) { const h = Math.floor(mins / 60); const m = mins % 60; return m > 0 ? `${h} hr ${m} min` : `${h} hr`; }
-              return `${mins} min`;
-            })()} wait
-          </Typography>
-        )}
+        {appt.status === 'active' &&
+          !appt.is_scheduled &&
+          appt.counter != null &&
+          appt.counter > 0 &&
+          appt.category_estimated_time > 0 && (
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'warning.dark',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+              }}
+            >
+              ⏱ ~
+              {(() => {
+                const mins = (appt.counter - 1) * appt.category_estimated_time;
+                if (mins <= 0) return 'your turn soon';
+                if (mins >= 60) {
+                  const h = Math.floor(mins / 60);
+                  const m = mins % 60;
+                  return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+                }
+                return `${mins} min`;
+              })()}{' '}
+              wait
+            </Typography>
+          )}
       </Box>
 
       {/* Right side */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 2, flexShrink: 0 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          ml: 2,
+          flexShrink: 0,
+        }}
+      >
         <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600 }}>
-          {appt.is_scheduled ? (appt.scheduled_time ? formatServerDateTime(appt.scheduled_time) : 'TBD') : formatDateLocal(new Date())}
+          {appt.is_scheduled
+            ? appt.scheduled_time
+              ? formatServerDateTime(appt.scheduled_time)
+              : 'TBD'
+            : appt.date_created
+              ? formatDateLocal(new Date(appt.date_created))
+              : formatDateLocal(new Date())}
         </Typography>
         <ChevronRightIcon sx={{ fontSize: 18, color: 'text.disabled', mt: 0.3 }} />
       </Box>
@@ -181,13 +245,11 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const hdrs = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-        const res = await fetch(`${API_BASE}/me/`, { headers: hdrs });
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data);
-        }
-      } catch (e) { /* ignore */ }
+        const data = await apiCall(ENDPOINTS.ME);
+        setUser(data);
+      } catch (e) {
+        /* ignore */
+      }
     };
     if (token) fetchUser();
   }, [token]);
@@ -195,7 +257,11 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   // Check if user is admin for this appointment's category
   const isUserAdmin = () => {
     if (!user || !appt) return false;
-    return user.is_staff || user.is_superuser || (user.groups && user.groups.some(g => g.id === appt.category_group_id));
+    return (
+      user.is_staff ||
+      user.is_superuser ||
+      (user.groups && user.groups.some((g) => g.id === appt.category_group_id))
+    );
   };
 
   // Stable refs so async callbacks always get latest values
@@ -207,15 +273,17 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   const doFetchNotes = React.useRef(async () => {
     const a = apptRef.current;
     if (!a) return;
-    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
+    const hdrs = {
+      Authorization: `Bearer ${tokenRef.current}`,
+      'Content-Type': 'application/json',
+    };
     setLoadingNotes(true);
     try {
-      const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, { headers: hdrs });
-      if (res.ok) {
-        const data = await res.json();
-        setNotes(data);
-      }
-    } catch (e) { /* ignore */ }
+      const data = await apiCall(ENDPOINTS.APPOINTMENT_NOTES(a.id));
+      setNotes(data);
+    } catch (e) {
+      /* ignore */
+    }
     setLoadingNotes(false);
   });
 
@@ -227,9 +295,11 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
         await doFetchNotes.current();
       })();
     } else {
-      (async () => { setNotes([]); })();
+      (async () => {
+        setNotes([]);
+      })();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appt && appt.id]);
 
   const handleAddUserNote = async () => {
@@ -240,11 +310,10 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
     }
     setNoteError('');
     setSubmittingNote(true);
-    const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
-    
+
     try {
       const payload = { content: noteText.trim() };
-      
+
       // If file was uploaded, convert to base64 and include in payload
       if (uploadedFile) {
         const reader = new FileReader();
@@ -253,44 +322,39 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             payload.file_data = e.target.result; // base64 data URL
             payload.file_name = uploadedFileName;
             payload.file_mime = uploadedFile.type;
-            
-            const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, {
+
+            const res = await apiCall(ENDPOINTS.APPOINTMENT_NOTES(a.id), {
               method: 'POST',
-              headers: hdrs,
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             });
-            
-            if (res.ok) {
-              setNoteText('');
-              setUploadedFile(null);
-              setUploadedFileName('');
-              await doFetchNotes.current();
-            } else {
-              const err = await res.json().catch(() => ({}));
-              setNoteError(err?.errors?.content?.[0] || err?.errors?.file_data?.[0] || err?.errors?.notes?.[0] || err?.errors || 'Failed to add note');
-            }
+
+            setNoteText('');
+            setUploadedFile(null);
+            setUploadedFileName('');
+            await doFetchNotes.current();
             setSubmittingNote(false);
           } catch (error) {
-            setNoteError('Failed to process file');
+            const errMsg = error.message || 'Failed to process file';
+            setNoteError(errMsg);
             setSubmittingNote(false);
           }
         };
         reader.readAsDataURL(uploadedFile);
       } else {
         // No file, just send content
-        const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, {
-          method: 'POST',
-          headers: hdrs,
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
+        try {
+          await apiCall(ENDPOINTS.APPOINTMENT_NOTES(a.id), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
           setNoteText('');
           setUploadedFile(null);
           setUploadedFileName('');
           await doFetchNotes.current();
-        } else {
-          const err = await res.json().catch(() => ({}));
-          setNoteError(err?.errors?.content?.[0] || err?.errors?.notes?.[0] || err?.errors || 'Failed to add note');
+        } catch (error) {
+          setNoteError(error.message || 'Failed to add note');
         }
         setSubmittingNote(false);
       }
@@ -303,17 +367,16 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   const handleDownloadFile = async (noteId) => {
     const a = apptRef.current;
     try {
-      const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/${noteId}/file/`, {
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
-      });
-      if (!res.ok) return;
-      const { file_data, file_name } = await res.json();
+      const res = await apiCall(ENDPOINTS.APPOINTMENT_NOTE_FILE(a.id, noteId));
+      const { file_data, file_name } = res;
       if (!file_data) return;
       const anchor = document.createElement('a');
       anchor.href = file_data;
       anchor.download = file_name || 'attachment';
       anchor.click();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   if (!appt) return null;
@@ -335,37 +398,63 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
       }}
     >
       {/* Header */}
-        <Box
-          sx={{
-            background: (theme) => theme.palette.custom ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)` : 'var(--gradient-primary)',
-            p: 2,
-            pb: 1.5,
-            color: '#fff',
-          }}
-        >
+      <Box
+        sx={{
+          background: (theme) =>
+            theme.palette.custom
+              ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)`
+              : 'var(--gradient-primary)',
+          p: 2,
+          pb: 1.5,
+          color: '#fff',
+        }}
+      >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Box>
             <Typography variant="overline" sx={{ opacity: 0.75, letterSpacing: 1.5, fontSize: 11 }}>
               Appointment Details
             </Typography>
-            <Typography variant="h5" fontWeight={900} sx={{ fontSize: isMobile ? '1.5rem' : '1.75rem' }}>
+            <Typography
+              variant="h5"
+              fontWeight={900}
+              sx={{ fontSize: isMobile ? '1.5rem' : '1.75rem' }}
+            >
               #{appt.id}
             </Typography>
           </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Chip
               label={cfg.label}
               size="small"
-              sx={{ bgcolor: 'rgba(255,255,255,0.25)', color: (theme) => theme.palette.custom.deepSlate, fontWeight: 700, fontSize: 11, textShadow: '0 1px 0 rgba(255,255,255,0.06)' }}
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.25)',
+                color: (theme) => theme.palette.custom.deepSlate,
+                fontWeight: 700,
+                fontSize: 11,
+                textShadow: '0 1px 0 rgba(255,255,255,0.06)',
+              }}
             />
             <Tooltip title="Refresh appointment">
               <span>
-                <IconButton onClick={() => onRefresh && onRefresh(appt && appt.id)} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate, p: '6px' }} disabled={refreshLoading}>
-                  {refreshLoading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon sx={{ fontSize: 16 }} />}
+                <IconButton
+                  onClick={() => onRefresh && onRefresh(appt && appt.id)}
+                  size="small"
+                  sx={{ color: (theme) => theme.palette.custom.deepSlate, p: '6px' }}
+                  disabled={refreshLoading}
+                >
+                  {refreshLoading ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <RefreshIcon sx={{ fontSize: 16 }} />
+                  )}
                 </IconButton>
               </span>
             </Tooltip>
-              <IconButton onClick={onClose} size="small" sx={{ color: (theme) => theme.palette.custom.deepSlate, p: '6px', zIndex: 2 }}>
+            <IconButton
+              onClick={onClose}
+              size="small"
+              sx={{ color: (theme) => theme.palette.custom.deepSlate, p: '6px', zIndex: 2 }}
+            >
               <CloseIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Box>
@@ -397,7 +486,10 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             >
               #{appt.counter}
             </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.3, fontWeight: 600, letterSpacing: 1, fontSize: 11 }}>
+            <Typography
+              variant="body2"
+              sx={{ opacity: 0.8, mt: 0.3, fontWeight: 600, letterSpacing: 1, fontSize: 11 }}
+            >
               QUEUE POSITION
             </Typography>
           </Box>
@@ -425,7 +517,10 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             />
           )}
           {(() => {
-            const displayName = `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() || appt.username || `User #${appt.user}`;
+            const displayName =
+              `${(appt.user_first_name || appt.first_name || '').trim()} ${(appt.user_last_name || '').trim()}`.trim() ||
+              appt.username ||
+              `User #${appt.user}`;
             return (
               <DetailRow
                 icon={<PersonOutlineIcon sx={{ color: 'text.secondary' }} />}
@@ -435,30 +530,39 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             );
           })()}
 
-          {!appt.is_scheduled && appt.counter != null && appt.counter > 0 && appt.category_estimated_time > 0 && (
-            <DetailRow
-              icon={<AccessTimeOutlinedIcon sx={{ color: 'warning.main' }} />}
-              label="Estimated Wait Time"
-              value={(() => {
-                const mins = (appt.counter - 1) * appt.category_estimated_time;
-                if (mins <= 0) return '🎉 Your turn soon!';
-                if (mins >= 60) { const h = Math.floor(mins / 60); const m = mins % 60; return m > 0 ? `~${h} hr ${m} min` : `~${h} hr`; }
-                return `~${mins} min`;
-              })()}
-              highlight
-            />
-          )}
+          {!appt.is_scheduled &&
+            appt.counter != null &&
+            appt.counter > 0 &&
+            appt.category_estimated_time > 0 && (
+              <DetailRow
+                icon={<AccessTimeOutlinedIcon sx={{ color: 'warning.main' }} />}
+                label="Estimated Wait Time"
+                value={(() => {
+                  const mins = (appt.counter - 1) * appt.category_estimated_time;
+                  if (mins <= 0) return '🎉 Your turn soon!';
+                  if (mins >= 60) {
+                    const h = Math.floor(mins / 60);
+                    const m = mins % 60;
+                    return m > 0 ? `~${h} hr ${m} min` : `~${h} hr`;
+                  }
+                  return `~${mins} min`;
+                })()}
+                highlight
+              />
+            )}
 
           {appt.is_scheduled && appt.scheduled_time && (
             <>
               <DetailRow
                 icon={<CalendarTodayOutlinedIcon color="primary" />}
                 label="Scheduled Time"
-                value={appt.scheduled_time_display
-                  ? appt.scheduled_time_display
-                  : appt.scheduled_time_with_category_tz
-                  ? appt.scheduled_time_with_category_tz
-                  : formatServerDateTime(appt.scheduled_time)}
+                value={
+                  appt.scheduled_time_display
+                    ? appt.scheduled_time_display
+                    : appt.scheduled_time_with_category_tz
+                      ? appt.scheduled_time_with_category_tz
+                      : formatServerDateTime(appt.scheduled_time)
+                }
                 highlight
               />
               {appt.scheduled_end_time && (
@@ -530,9 +634,20 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
         {notesExpanded && (
           <Box sx={{ mt: 1 }}>
             {loadingNotes ? (
-              <Box>{[...Array(2)].map((_, i) => <Skeleton key={i} variant="rounded" height={48} sx={{ mb: 0.75, borderRadius: 2 }} />)}</Box>
+              <Box>
+                {[...Array(2)].map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    variant="rounded"
+                    height={48}
+                    sx={{ mb: 0.75, borderRadius: 2 }}
+                  />
+                ))}
+              </Box>
             ) : notes.length === 0 ? (
-              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 1 }}>No notes yet.</Typography>
+              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 1 }}>
+                No notes yet.
+              </Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
                 {notes.map((note) => (
@@ -547,20 +662,37 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
                     }}
                   >
                     {note.content && (
-                      <Typography variant="body2" sx={{ fontSize: '0.82rem', wordBreak: 'break-word' }}>{note.content}</Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontSize: '0.82rem', wordBreak: 'break-word' }}
+                      >
+                        {note.content}
+                      </Typography>
                     )}
                     {note.has_file && (
                       <Button
                         size="small"
                         startIcon={<DownloadIcon sx={{ fontSize: 13 }} />}
                         onClick={() => handleDownloadFile(note.id)}
-                        sx={{ mt: 0.5, fontSize: 11, py: 0.25, px: 0.75, borderRadius: 1.5, textTransform: 'none' }}
+                        sx={{
+                          mt: 0.5,
+                          fontSize: 11,
+                          py: 0.25,
+                          px: 0.75,
+                          borderRadius: 1.5,
+                          textTransform: 'none',
+                        }}
                       >
                         {note.file_name || 'Download file'}
                       </Button>
                     )}
-                    <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.3, fontSize: '0.7rem' }}>
-                      {note.is_admin_note ? '🛡 Admin' : '👤 You'} · {note.added_by_name || ''} · {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                    <Typography
+                      variant="caption"
+                      color="text.disabled"
+                      sx={{ display: 'block', mt: 0.3, fontSize: '0.7rem' }}
+                    >
+                      {note.is_admin_note ? '🛡 Admin' : '👤 You'} · {note.added_by_name || ''} ·{' '}
+                      {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
                     </Typography>
                   </Paper>
                 ))}
@@ -581,7 +713,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
                 FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
               />
-              
+
               {/* File upload section - only for admins */}
               {isUserAdmin() && (
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -608,19 +740,37 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
                   {uploadedFileName && (
                     <Button
                       size="small"
-                      sx={{ borderRadius: 2, textTransform: 'none', fontSize: 11, px: 1.5, color: 'text.secondary', flex: 1, justifyContent: 'space-between' }}
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontSize: 11,
+                        px: 1.5,
+                        color: 'text.secondary',
+                        flex: 1,
+                        justifyContent: 'space-between',
+                      }}
                     >
                       ✅ {uploadedFileName}
                     </Button>
                   )}
                 </Box>
               )}
-              
-              {noteError && <Typography variant="caption" color="error">{noteError}</Typography>}
+
+              {noteError && (
+                <Typography variant="caption" color="error">
+                  {noteError}
+                </Typography>
+              )}
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={submittingNote ? <CircularProgress size={13} /> : <NoteAddOutlinedIcon sx={{ fontSize: 15 }} />}
+                startIcon={
+                  submittingNote ? (
+                    <CircularProgress size={13} />
+                  ) : (
+                    <NoteAddOutlinedIcon sx={{ fontSize: 15 }} />
+                  )
+                }
                 onClick={handleAddUserNote}
                 disabled={submittingNote || (!noteText.trim() && !uploadedFile)}
                 sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12, alignSelf: 'flex-end' }}
@@ -640,7 +790,10 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
             variant="outlined"
             color="error"
             startIcon={<CancelOutlinedIcon />}
-            onClick={() => { onClose(); onCancel(appt); }}
+            onClick={() => {
+              onClose();
+              onCancel(appt);
+            }}
             sx={{ borderRadius: 2, fontWeight: 600 }}
           >
             Cancel Appointment
@@ -661,8 +814,14 @@ function DetailRow({ icon, label, value, highlight }) {
       <ListItemIcon sx={{ minWidth: 36 }}>{icon}</ListItemIcon>
       <ListItemText
         primary={
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, flexShrink: 0 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}
+          >
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontWeight: 500, flexShrink: 0 }}
+            >
               {label}
             </Typography>
             <Typography
@@ -688,13 +847,20 @@ export default function AppointmentsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
 
+  // Ref for infinite scroll
+  const loadMoreRef = React.useRef(null);
+
   const [tab, setTab] = useState(0);
   const [appointments, setAppointments] = useState([]);
   const [statusFilter, setStatusFilter] = useState('active');
   const [statusAnchor, setStatusAnchor] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextPageUrl, setNextPageUrl] = useState(null);
   const [selected, setSelected] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
@@ -707,9 +873,9 @@ export default function AppointmentsPage() {
   const authHeaders = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const tabEndpoints = [
-    `${API_BASE}/appointments/?type=all&page_size=50`,
-    `${API_BASE}/appointments/?type=unscheduled&page_size=50`,
-    `${API_BASE}/appointments/?type=scheduled&page_size=50`,
+    ENDPOINTS.APPOINTMENTS_ALL(),
+    ENDPOINTS.APPOINTMENTS_UNSCHEDULED(),
+    ENDPOINTS.APPOINTMENTS_SCHEDULED(),
   ];
 
   useEffect(() => {
@@ -717,55 +883,66 @@ export default function AppointmentsPage() {
     (async () => {
       setLoading(true);
       setError('');
+      setPage(1);
+      setHasMore(false);
+      setNextPageUrl(null);
       try {
-        const endpoint = tabEndpoints[tab] + (statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : '');
-        const res = await fetch(endpoint, { headers: authHeaders });
-        if (res.ok) {
-          const data = await res.json();
-          if (!mounted) return;
-          setAppointments(data.results || []);
-          setTotalCount(typeof data.count === 'number' ? data.count : (data.results || []).length);
+        const endpoint =
+          tabEndpoints[tab] +
+          (statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : '');
+        const data = await apiCall(endpoint);
+        if (!mounted) return;
+        setAppointments(data.results || []);
+        setTotalCount(typeof data.count === 'number' ? data.count : (data.results || []).length);
+        setNextPageUrl(data.next || null);
+        setHasMore(Boolean(data.next));
+        setPage(1);
 
-          // If the page was opened with appointmentId in URL, fetch and open that appointment
-          const targetId = appointmentId || location?.state?.openApptId;
-          if (targetId) {
-            const found = (data.results || []).find((a) => String(a.id) === String(targetId));
-            if (found) {
-              setSelected(found);
+        // If the page was opened with appointmentId in URL, fetch and open that appointment
+        const targetId = appointmentId || location?.state?.openApptId;
+        if (targetId) {
+          const found = (data.results || []).find((a) => String(a.id) === String(targetId));
+          if (found) {
+            setSelected(found);
+            setDrawerOpen(true);
+            // Clear navigation state so re-rendering doesn't re-open the drawer
+            try {
+              navigate(location.pathname, { replace: true, state: {} });
+            } catch (e) {
+              /* ignore */
+            }
+          } else {
+            // fetch the appointment directly
+            try {
+              const ap = await apiCall(ENDPOINTS.APPOINTMENT_DETAIL(targetId));
+              if (!mounted) return;
+              setSelected(ap);
               setDrawerOpen(true);
-              // Clear navigation state so re-rendering doesn't re-open the drawer
-              try { navigate(location.pathname, { replace: true, state: {} }); } catch (e) { /* ignore */ }
-            } else {
-              // fetch the appointment directly
               try {
-                const single = await fetch(`${API_BASE}/appointments/${targetId}/`, { headers: authHeaders });
-                if (single.ok) {
-                  const ap = await single.json();
-                  if (!mounted) return;
-                  setSelected(ap);
-                  setDrawerOpen(true);
-                  try { navigate(location.pathname, { replace: true, state: {} }); } catch (e) { /* ignore */ }
-                }
-              } catch (err) {
-                // ignore - don't block the page
+                navigate(location.pathname, { replace: true, state: {} });
+              } catch (e) {
+                /* ignore */
               }
+            } catch (err) {
+              // ignore - don't block the page
             }
           }
-        } else if (res.status === 401) {
+        }
+      } catch (err) {
+        if (!mounted) return;
+        if (err.status === 401) {
           localStorage.clear();
           navigate('/');
         } else {
-          if (!mounted) return;
-          setError('Failed to load appointments.');
+          setError(err.message || 'Network error. Please try again.');
         }
-      } catch {
-        if (!mounted) return;
-        setError('Network error. Please try again.');
       }
       if (mounted) setLoading(false);
     })();
-    return () => { mounted = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, token, location?.state?.openApptId, navigate, reloadKey, statusFilter]);
 
   const handleRowClick = (appt) => {
@@ -773,24 +950,65 @@ export default function AppointmentsPage() {
     setDrawerOpen(true);
   };
 
+  const handleLoadMore = useCallback(async () => {
+    if (!nextPageUrl || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await apiCall(nextPageUrl);
+      setAppointments((prev) => [...prev, ...(data.results || [])]);
+      setNextPageUrl(data.next || null);
+      setHasMore(Boolean(data.next));
+      setPage((p) => p + 1);
+    } catch (err) {
+      console.error('Failed to load more appointments:', err);
+      // Don't show error banner for loadMore, just silently fail
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextPageUrl, loadingMore, hasMore]);
+
+  // Infinite scroll: Automatically load more when user scrolls near the Load More button
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      async (entries) => {
+        // If the load more button is visible, trigger auto-load
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          await handleLoadMore();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '100px', // Start loading 100px before entering viewport
+        threshold: 0.1,
+      }
+    );
+
+    // Observe the load more button element - store ref in variable for cleanup
+    const loadMoreElement = loadMoreRef.current;
+    if (loadMoreElement) {
+      observer.observe(loadMoreElement);
+    }
+
+    return () => {
+      if (loadMoreElement) {
+        observer.unobserve(loadMoreElement);
+      }
+    };
+  }, [hasMore, loadingMore, loading, handleLoadMore]);
+
   const handleCancel = async () => {
     if (!cancelTarget) return;
     setCancelling(true);
     setCancelError('');
     try {
-      const res = await fetch(`${API_BASE}/appointments/${cancelTarget.id}/cancel/`, {
+      await apiCall(ENDPOINTS.APPOINTMENT_CANCEL(cancelTarget.id), {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
       });
-      if (res.ok) {
-        setCancelTarget(null);
-        setReloadKey((r) => r + 1);
-      } else {
-        const err = await res.json();
-        setCancelError(err.detail || 'Failed to cancel appointment.');
-      }
-    } catch {
-      setCancelError('Network error.');
+      setCancelTarget(null);
+      setReloadKey((r) => r + 1);
+    } catch (err) {
+      setCancelError(err.message || 'Failed to cancel appointment.');
     }
     setCancelling(false);
   };
@@ -799,46 +1017,54 @@ export default function AppointmentsPage() {
     if (!id) return;
     setRefreshLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/appointments/${id}/`, { headers: authHeaders });
-      if (res.ok) {
-        const ap = await res.json();
-        setSelected(ap);
-        // also update appointments list if present
-        setAppointments((prev) => {
-          if (!Array.isArray(prev)) return prev;
-          const idx = prev.findIndex((a) => String(a.id) === String(ap.id));
-          if (idx === -1) return prev;
-          const copy = prev.slice();
-          copy[idx] = ap;
-          return copy;
-        });
-      } else if (res.status === 401) {
+      const ap = await apiCall(ENDPOINTS.APPOINTMENT_DETAIL(id));
+      setSelected(ap);
+      // also update appointments list if present
+      setAppointments((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        const idx = prev.findIndex((a) => String(a.id) === String(ap.id));
+        if (idx === -1) return prev;
+        const copy = prev.slice();
+        copy[idx] = ap;
+        return copy;
+      });
+    } catch (err) {
+      if (err.status === 401) {
         localStorage.clear();
         navigate('/');
       }
-    } catch (e) {
       // ignore network errors here — user can retry
     }
     setRefreshLoading(false);
   };
 
   // Stats
-  const activeCount   = appointments.filter((a) => a.status === 'active').length;
-  const checkinCount  = appointments.filter((a) => a.status === 'checkin').length;
+  const activeCount = appointments.filter((a) => a.status === 'active').length;
+  const checkinCount = appointments.filter((a) => a.status === 'checkin').length;
   const checkoutCount = appointments.filter((a) => a.status === 'checkout').length;
-  const firstActive   = appointments.find((a) => a.status === 'active');
+  const firstActive = appointments.find((a) => a.status === 'active');
 
   const tabLabels = ['All', 'Walk-ins', 'Scheduled'];
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        bgcolor: 'background.default',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       <Navbar />
 
       {/* Mobile hero counter — shown when user has an active appointment */}
       {isMobile && firstActive && (
         <Box
           sx={{
-            background: (theme) => theme.palette.custom ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)` : 'var(--gradient-primary)',
+            background: (theme) =>
+              theme.palette.custom
+                ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)`
+                : 'var(--gradient-primary)',
             color: '#fff',
             px: 3,
             pt: 3,
@@ -866,7 +1092,13 @@ export default function AppointmentsPage() {
           <Button
             size="small"
             variant="outlined"
-            sx={{ mt: 1.5, color: '#fff', borderColor: 'rgba(255,255,255,0.5)', borderRadius: 2, fontSize: 12 }}
+            sx={{
+              mt: 1.5,
+              color: '#fff',
+              borderColor: 'rgba(255,255,255,0.5)',
+              borderRadius: 2,
+              fontSize: 12,
+            }}
             onClick={() => handleRowClick(firstActive)}
           >
             View Details
@@ -887,20 +1119,44 @@ export default function AppointmentsPage() {
         {/* Page header */}
         <Fade in timeout={400}>
           <Box sx={{ mb: isMobile ? 2 : 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 2,
+              }}
+            >
               <Box>
                 {!isMobile && (
-                  <Typography variant="h4" fontWeight={900} sx={{ color: 'text.primary', mb: 0.5 }}>My Appointments</Typography>
+                  <Typography variant="h4" fontWeight={900} sx={{ color: 'text.primary', mb: 0.5 }}>
+                    My Appointments
+                  </Typography>
                 )}
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: isMobile ? 0 : 1 }}>
                   {activeCount > 0 && (
-                    <Chip label={`${activeCount} Active`} size="small" color="success" sx={{ fontWeight: 600 }} />
+                    <Chip
+                      label={`${activeCount} Active`}
+                      size="small"
+                      color="success"
+                      sx={{ fontWeight: 600 }}
+                    />
                   )}
                   {checkinCount > 0 && (
-                    <Chip label={`${checkinCount} Checked In`} size="small" color="info" sx={{ fontWeight: 600 }} />
+                    <Chip
+                      label={`${checkinCount} Checked In`}
+                      size="small"
+                      color="info"
+                      sx={{ fontWeight: 600 }}
+                    />
                   )}
                   {checkoutCount > 0 && (
-                    <Chip label={`${checkoutCount} Checked Out`} size="small" sx={{ fontWeight: 600, bgcolor: '#ede7f6', color: '#4527a0' }} />
+                    <Chip
+                      label={`${checkoutCount} Checked Out`}
+                      size="small"
+                      sx={{ fontWeight: 600, bgcolor: '#ede7f6', color: '#4527a0' }}
+                    />
                   )}
                 </Box>
               </Box>
@@ -912,17 +1168,25 @@ export default function AppointmentsPage() {
                     sx={{
                       width: 44,
                       height: 44,
-                      bgcolor: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC',
+                      bgcolor: (theme) =>
+                        theme.palette.custom ? theme.palette.custom.teal : '#00C4CC',
                       color: '#fff',
                       borderRadius: '50%',
                       boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-                      '&:hover': { bgcolor: (theme) => theme.palette.custom ? theme.palette.primary.main : '#007BFF' },
+                      '&:hover': {
+                        bgcolor: (theme) =>
+                          theme.palette.custom ? theme.palette.primary.main : '#007BFF',
+                      },
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    {loading ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : <RefreshIcon />}
+                    {loading ? (
+                      <CircularProgress size={18} sx={{ color: '#fff' }} />
+                    ) : (
+                      <RefreshIcon />
+                    )}
                   </IconButton>
                 </Tooltip>
                 <Button
@@ -935,7 +1199,10 @@ export default function AppointmentsPage() {
                     borderRadius: 12,
                     px: 3,
                     py: 1.25,
-                    background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                    background: (theme) =>
+                      theme.palette.custom
+                        ? theme.palette.custom.gradientPrimary
+                        : 'var(--gradient-primary)',
                     color: '#fff',
                     boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
                     '& .MuiButton-startIcon': { color: '#fff' },
@@ -956,9 +1223,16 @@ export default function AppointmentsPage() {
           variant={isMobile ? 'fullWidth' : 'standard'}
           sx={{
             mb: isMobile ? 2 : 3,
-            '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minWidth: isMobile ? 0 : 80 },
+            '& .MuiTab-root': {
+              fontWeight: 600,
+              textTransform: 'none',
+              minWidth: isMobile ? 0 : 80,
+            },
             '& .MuiTabs-indicator': {
-              background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+              background: (theme) =>
+                theme.palette.custom
+                  ? theme.palette.custom.gradientPrimary
+                  : 'var(--gradient-primary)',
               height: 3,
               borderRadius: 2,
             },
@@ -978,7 +1252,9 @@ export default function AppointmentsPage() {
             sx={{ minWidth: 140, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1 }}
           >
             {totalCount != null && (
-              <Box component="span" sx={{ fontWeight: 800 }}>{totalCount}</Box>
+              <Box component="span" sx={{ fontWeight: 800 }}>
+                {totalCount}
+              </Box>
             )}
             <Box component="span" sx={{ textTransform: 'none', fontWeight: 600 }}>
               {statusConfig[statusFilter]?.label || statusFilter}
@@ -1010,14 +1286,32 @@ export default function AppointmentsPage() {
           </Menu>
         </Box>
 
-        {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {/* Loading */}
         {loading && (
           <Box>
             {[...Array(4)].map((_, i) => (
-              <Paper key={i} sx={{ p: 2, mb: 1.5, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Skeleton variant="circular" width={isMobile ? 52 : 38} height={isMobile ? 52 : 38} />
+              <Paper
+                key={i}
+                sx={{
+                  p: 2,
+                  mb: 1.5,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                }}
+              >
+                <Skeleton
+                  variant="circular"
+                  width={isMobile ? 52 : 38}
+                  height={isMobile ? 52 : 38}
+                />
                 <Box sx={{ flex: 1 }}>
                   <Skeleton width="55%" height={20} />
                   <Skeleton width="40%" height={16} />
@@ -1039,18 +1333,60 @@ export default function AppointmentsPage() {
           </Fade>
         )}
 
+        {/* Load More Button - Auto-triggers on scroll (infinite scroll) */}
+        {hasMore && !loading && (
+          <Box ref={loadMoreRef} sx={{ py: 2, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Showing {appointments.length} of {totalCount} appointments
+            </Typography>
+            {loadingMore && (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <CircularProgress size={20} />
+                <Typography variant="caption" color="text.secondary">
+                  Loading more...
+                </Typography>
+              </Box>
+            )}
+            {!loadingMore && (
+              <Button
+                variant="outlined"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                sx={{ mt: 1 }}
+              >
+                Load More
+              </Button>
+            )}
+          </Box>
+        )}
+
         {/* Empty state */}
         {!loading && appointments.length === 0 && !error && (
           <Fade in timeout={300}>
             <Box sx={{ textAlign: 'center', py: isMobile ? 8 : 10 }}>
-              <EventAvailableOutlinedIcon sx={{ fontSize: 72, opacity: 0.12, mb: 2, color: (theme) => theme.palette.custom ? theme.palette.custom.teal : '#00C4CC' }} />
+              <EventAvailableOutlinedIcon
+                sx={{
+                  fontSize: 72,
+                  opacity: 0.12,
+                  mb: 2,
+                  color: (theme) => (theme.palette.custom ? theme.palette.custom.teal : '#00C4CC'),
+                }}
+              />
               <Typography variant="h6" fontWeight={600} color="text.secondary" gutterBottom>
                 No appointments here
               </Typography>
               <Typography variant="body2" color="text.disabled" sx={{ mb: 3 }}>
                 Join a queue to see your appointments.
               </Typography>
-              <Button variant="contained" color="primary" startIcon={<AddCircleOutlineIcon />} onClick={() => navigate('/home')} sx={{ borderRadius: 2 }}>Find a Queue</Button>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddCircleOutlineIcon />}
+                onClick={() => navigate('/home')}
+                sx={{ borderRadius: 2 }}
+              >
+                Find a Queue
+              </Button>
             </Box>
           </Fade>
         )}
@@ -1061,7 +1397,10 @@ export default function AppointmentsPage() {
         appt={selected}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onCancel={(appt) => { setCancelTarget(appt); setCancelError(''); }}
+        onCancel={(appt) => {
+          setCancelTarget(appt);
+          setCancelError('');
+        }}
         onRefresh={handleRefreshAppointment}
         refreshLoading={refreshLoading}
       />
@@ -1075,20 +1414,39 @@ export default function AppointmentsPage() {
         fullScreen={isMobile}
         PaperProps={{ sx: { borderRadius: isMobile ? 0 : 4, overflow: 'hidden' } }}
       >
-  <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
+        <Box
+          sx={{
+            height: 4,
+            background: (theme) =>
+              theme.palette.custom
+                ? theme.palette.custom.gradientPrimary
+                : 'var(--gradient-primary)',
+          }}
+        />
         <DialogTitle sx={{ fontWeight: 700 }}>Cancel Appointment</DialogTitle>
         <DialogContent>
           {cancelTarget && (
             <Typography variant="body2" color="text.secondary">
-              Are you sure you want to cancel{' '}
-              <strong>Appointment #{cancelTarget.id}</strong>
+              Are you sure you want to cancel <strong>Appointment #{cancelTarget.id}</strong>
               {cancelTarget.counter ? ` (Queue #${cancelTarget.counter})` : ''}?
             </Typography>
           )}
-          {cancelError && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{cancelError}</Alert>}
+          {cancelError && (
+            <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>
+              {cancelError}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={() => { setCancelTarget(null); setCancelError(''); }} variant="outlined" disabled={cancelling} sx={{ borderRadius: 2 }}>
+          <Button
+            onClick={() => {
+              setCancelTarget(null);
+              setCancelError('');
+            }}
+            variant="outlined"
+            disabled={cancelling}
+            sx={{ borderRadius: 2 }}
+          >
             Keep it
           </Button>
           <Button
@@ -1096,7 +1454,9 @@ export default function AppointmentsPage() {
             variant="contained"
             color="error"
             disabled={cancelling}
-            startIcon={cancelling ? <CircularProgress size={16} color="inherit" /> : <CancelOutlinedIcon />}
+            startIcon={
+              cancelling ? <CircularProgress size={16} color="inherit" /> : <CancelOutlinedIcon />
+            }
             sx={{ borderRadius: 2 }}
           >
             {cancelling ? 'Cancelling…' : 'Cancel Appointment'}

@@ -3,6 +3,7 @@ import { useTheme, useMediaQuery } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { useLoginModal } from '../contexts/LoginModalContext.js';
+import { ENDPOINTS, apiCall } from '../utils/api.js';
 import {
   Box,
   Typography,
@@ -49,8 +50,6 @@ import Navbar from '../components/Navbar.js';
 import BookingConfirmDialog from '../components/BookingConfirmDialog.js';
 import SchedulerDialog from '../components/SchedulerDialog.js';
 
-const API_BASE = '/api';
-
 /** Format total minutes into a human-readable string, e.g. 90 → "1 hr 30 min" */
 function formatWaitMinutes(totalMins) {
   if (!totalMins || totalMins <= 0) return null;
@@ -92,7 +91,14 @@ function OrgCard({ org, onClick }) {
       }}
     >
       <CardActionArea onClick={onClick} sx={{ height: '100%' }}>
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+        <CardContent
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            height: '100%',
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Avatar
               src={org.display_picture_url || undefined}
@@ -175,10 +181,25 @@ function OrgCard({ org, onClick }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', flex: '1 1 auto', minWidth: 0 }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      textDecoration: 'none',
+                      flex: '1 1 auto',
+                      minWidth: 0,
+                    }}
                   >
                     <MapIcon sx={{ fontSize: 14, color: '#e53935', flexShrink: 0 }} />
-                    <Typography variant="caption" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {[org.address_line1, org.pincode].filter(Boolean).join(', ')}
                     </Typography>
                   </Box>
@@ -189,10 +210,18 @@ function OrgCard({ org, onClick }) {
                   component="a"
                   href={`tel:${org.phone_number}`}
                   onClick={(e) => e.stopPropagation()}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.4, textDecoration: 'none', flexShrink: 0 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.4,
+                    textDecoration: 'none',
+                    flexShrink: 0,
+                  }}
                 >
                   <PhoneIcon sx={{ fontSize: 13, color: 'success.main' }} />
-                  <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{org.phone_number}</Typography>
+                  <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>
+                    {org.phone_number}
+                  </Typography>
                 </Box>
               )}
             </Box>
@@ -214,7 +243,14 @@ function CategoryCard({ category, onClick }) {
       }}
     >
       <CardActionArea onClick={onClick} sx={{ height: '100%' }}>
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+        <CardContent
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            height: '100%',
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
             <Avatar
               sx={{
@@ -266,12 +302,19 @@ function CategoryCard({ category, onClick }) {
                 fontSize: 11,
                 height: 22,
                 fontWeight: 600,
-                bgcolor: (theme) => (isScheduled ? theme.palette.custom.mint : 'rgba(45,84,110,0.06)'),
-                color: (theme) => (isScheduled ? theme.palette.primary.main : theme.palette.custom.deepSlate),
+                bgcolor: (theme) =>
+                  isScheduled ? theme.palette.custom.mint : 'rgba(45,84,110,0.06)',
+                color: (theme) =>
+                  isScheduled ? theme.palette.primary.main : theme.palette.custom.deepSlate,
               }}
             />
             {category.type && (
-              <Chip label={category.type} size="small" variant="outlined" sx={{ fontSize: 11, height: 22 }} />
+              <Chip
+                label={category.type}
+                size="small"
+                variant="outlined"
+                sx={{ fontSize: 11, height: 22 }}
+              />
             )}
             {/* Show scheduling-related details only for scheduled categories */}
             {category.is_scheduled && category.estimated_time && (
@@ -325,10 +368,25 @@ function CategoryCard({ category, onClick }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', flex: '1 1 auto', minWidth: 0 }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      textDecoration: 'none',
+                      flex: '1 1 auto',
+                      minWidth: 0,
+                    }}
                   >
                     <MapIcon sx={{ fontSize: 14, color: '#e53935', flexShrink: 0 }} />
-                    <Typography variant="caption" sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {[category.address_line1, category.pincode].filter(Boolean).join(', ')}
                     </Typography>
                   </Box>
@@ -339,10 +397,18 @@ function CategoryCard({ category, onClick }) {
                   component="a"
                   href={`tel:${category.phone_number}`}
                   onClick={(e) => e.stopPropagation()}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, textDecoration: 'none', flexShrink: 0 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    textDecoration: 'none',
+                    flexShrink: 0,
+                  }}
                 >
                   <PhoneIcon sx={{ fontSize: 12, color: 'success.main' }} />
-                  <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>{category.phone_number}</Typography>
+                  <Typography variant="caption" sx={{ color: 'success.dark', fontWeight: 600 }}>
+                    {category.phone_number}
+                  </Typography>
                 </Box>
               )}
             </Box>
@@ -369,7 +435,9 @@ export default function HomePage() {
   const [recentSearches, setRecentSearches] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('recentSearches') || '[]');
-    } catch (e) { return []; }
+    } catch (e) {
+      return [];
+    }
   });
   const searchDebounceRef = useRef(null);
   const searchAbortRef = useRef(null);
@@ -422,17 +490,17 @@ export default function HomePage() {
           // token should be present in localStorage; use it when available.
           if (!categories || categories.length === 0) {
             try {
-              const t = localStorage.getItem('accessToken');
-              const hdrs = t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-              const catRes = await fetch(`${API_BASE}/categories/active/?organization=${preOrg.id}&page_size=50`, { headers: hdrs });
-              if (catRes.ok) {
-                const catData = await catRes.json();
-                setCategories(catData.results || []);
-              } else {
-                // fallback to showing the single pre-selected category
-                setCategories([preCat]);
+              // Fetch all pages of categories
+              let allCategories = [];
+              let nextUrl = ENDPOINTS.CATEGORIES_ACTIVE(preOrg.id);
+              while (nextUrl) {
+                const data = await apiCall(nextUrl);
+                allCategories.push(...(data.results || []));
+                nextUrl = data.next;
               }
+              setCategories(allCategories);
             } catch {
+              // fallback to showing the single pre-selected category
               setCategories([preCat]);
             }
           }
@@ -451,7 +519,7 @@ export default function HomePage() {
         }
       })();
     }
-  // Run when location.state changes so modal-based logins can resume flow
+    // Run when location.state changes so modal-based logins can resume flow
   }, [location.state]);
 
   // Listen for post-login resume events (emitted when login modal succeeds)
@@ -470,22 +538,22 @@ export default function HomePage() {
             // shows all services after login/resume instead of only the
             // single clicked category.
             try {
-              const t = localStorage.getItem('accessToken');
-              const hdrs = t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-              const catRes = await fetch(`${API_BASE}/categories/active/?organization=${preOrg.id}&page_size=50`, { headers: hdrs });
-              if (catRes.ok) {
-                const catData = await catRes.json();
-                setCategories(catData.results || [preCat]);
-              } else {
-                setCategories([preCat]);
+              // Fetch all pages of categories
+              let allCategories = [];
+              let nextUrl = ENDPOINTS.CATEGORIES_ACTIVE(preOrg.id);
+              while (nextUrl) {
+                const data = await apiCall(nextUrl);
+                allCategories.push(...(data.results || []));
+                nextUrl = data.next;
               }
+              setCategories(allCategories);
             } catch {
               setCategories([preCat]);
             }
 
             setSelectedCategory(preCat);
             if (preCat.is_scheduled) {
-                    setScheduledOpen(true);
+              setScheduledOpen(true);
             } else {
               setBookingStatus(null);
               setBookingResult(null);
@@ -502,23 +570,23 @@ export default function HomePage() {
     return () => window.removeEventListener('sqip:postLogin', handler);
   }, []);
 
-  const handleSearch = useCallback(async (q, p = 1) => {
-    // q: query string, p: page number (1-indexed)
-    if (!q || !q.trim()) return;
-    setSearching(true);
-    setSearchError('');
-    try {
-      // cancel previous inflight search
-      try { if (searchAbortRef.current) searchAbortRef.current.abort(); } catch (e) {}
-      const controller = new AbortController();
-      searchAbortRef.current = controller;
+  const handleSearch = useCallback(
+    async (q, p = 1) => {
+      // q: query string, p: page number (1-indexed)
+      if (!q || !q.trim()) return;
+      setSearching(true);
+      setSearchError('');
+      try {
+        // cancel previous inflight search
+        try {
+          if (searchAbortRef.current) searchAbortRef.current.abort();
+        } catch (e) {}
+        const controller = new AbortController();
+        searchAbortRef.current = controller;
 
-      const res = await fetch(`${API_BASE}/organizations/active/?search=${encodeURIComponent(q)}&page_size=20&page=${p}`, {
-        headers: authHeaders,
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
+        const data = await apiCall(ENDPOINTS.ORGANIZATIONS_ACTIVE(q, p), {
+          signal: controller.signal,
+        });
         const results = data.results || [];
         if (p === 1) setOrgs(results);
         else setOrgs((prev) => [...prev, ...results]);
@@ -526,36 +594,38 @@ export default function HomePage() {
         setNextPageUrl(data.next || null);
         setHasMore(Boolean(data.next));
         setPage(p);
-        if ((data.results || []).length === 0 && p === 1) setSearchError('No organizations found. Try a different search.');
+        if ((data.results || []).length === 0 && p === 1)
+          setSearchError('No organizations found. Try a different search.');
         // update recent searches only after successful results for page 1
-            // Only record a recent search when it was triggered explicitly (Search button, Enter, or recent click)
-            if (p === 1 && results.length > 0 && skipDebounceRef.current) {
+        // Only record a recent search when it was triggered explicitly (Search button, Enter, or recent click)
+        if (p === 1 && results.length > 0 && skipDebounceRef.current) {
+          try {
+            const trimmed = q.trim();
+            setRecentSearches((prev) => {
+              const cur = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, 4);
               try {
-                const trimmed = q.trim();
-                setRecentSearches((prev) => {
-                  const cur = [trimmed, ...prev.filter((s) => s !== trimmed)].slice(0, 4);
-                  try { localStorage.setItem('recentSearches', JSON.stringify(cur)); } catch (e) {}
-                  return cur;
-                });
+                localStorage.setItem('recentSearches', JSON.stringify(cur));
               } catch (e) {}
-            }
-            // reset manual-trigger flag so subsequent debounced searches don't record
-            skipDebounceRef.current = false;
-      } else if (res.status === 401) {
-        localStorage.clear();
-        navigate('/');
-      } else {
-        setSearchError('Failed to fetch organizations.');
+              return cur;
+            });
+          } catch (e) {}
+        }
+        // reset manual-trigger flag so subsequent debounced searches don't record
+        skipDebounceRef.current = false;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          // aborted by a newer request - ignore
+        } else if (err.status === 401) {
+          localStorage.clear();
+          navigate('/');
+        } else {
+          setSearchError(err.message || 'Network error. Please try again.');
+        }
       }
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        // aborted by a newer request - ignore
-      } else {
-        setSearchError('Network error. Please try again.');
-      }
-    }
-    setSearching(false);
-  }, [token, navigate]);
+      setSearching(false);
+    },
+    [token, navigate]
+  );
 
   const handleSelectOrg = async (org) => {
     // Save recent search term for convenience
@@ -574,18 +644,19 @@ export default function HomePage() {
     setCatError('');
     setLoadingCats(true);
     try {
-      const res = await fetch(`${API_BASE}/categories/active/?organization=${org.id}&page_size=50`, {
-        headers: authHeaders,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCategories(data.results || []);
-        if ((data.results || []).length === 0) setCatError('No active categories found for this organization.');
-      } else {
-        setCatError('Failed to load categories.');
+      // Fetch all pages of categories
+      let allCategories = [];
+      let nextUrl = ENDPOINTS.CATEGORIES_ACTIVE(org.id);
+      while (nextUrl) {
+        const data = await apiCall(nextUrl);
+        allCategories.push(...(data.results || []));
+        nextUrl = data.next;
       }
-    } catch {
-      setCatError('Network error. Please try again.');
+      setCategories(allCategories);
+      if (allCategories.length === 0)
+        setCatError('No active categories found for this organization.');
+    } catch (err) {
+      setCatError(err.message || 'Network error. Please try again.');
     }
     setLoadingCats(false);
   };
@@ -598,7 +669,7 @@ export default function HomePage() {
       openLogin({ from: location.pathname, preSelectOrg: selectedOrg, preSelectCat: cat });
       return;
     }
-    
+
     setSelectedCategory(cat);
     setBookingStatus(null);
     setBookingResult(null);
@@ -614,53 +685,34 @@ export default function HomePage() {
   const handleConfirmBooking = async () => {
     setBookingStatus('loading');
     try {
-      const res = await fetch(`${API_BASE}/appointments/unschedule/`, {
+      const data = await apiCall(ENDPOINTS.APPOINTMENTS_UNSCHEDULE, {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organization: selectedOrg.id,
           category: selectedCategory.id,
           user: parseInt(userId, 10),
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        // API may return { appointment: { ... } } or the appointment object directly
-        const appt = data.appointment ? data.appointment : data;
-        setBookingResult(appt);
-        setBookingStatus('success');
-        // Post optional note best-effort
-        if (confirmNote.trim() && appt?.id) {
-          try {
-            await fetch(`${API_BASE}/appointments/${appt.id}/notes/`, {
-              method: 'POST',
-              headers: authHeaders,
-              body: JSON.stringify({ content: confirmNote.trim() }),
-            });
-          } catch { /* ignore */ }
+      // API may return { appointment: { ... } } or the appointment object directly
+      const appt = data.appointment ? data.appointment : data;
+      setBookingResult(appt);
+      setBookingStatus('success');
+      // Post optional note best-effort
+      if (confirmNote.trim() && appt?.id) {
+        try {
+          await apiCall(ENDPOINTS.APPOINTMENT_NOTES(appt.id), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: confirmNote.trim() }),
+          });
+        } catch {
+          /* ignore */
         }
-      } else {
-        const err = await res.json();
-        // Prefer detail > non_field_errors > first errors.* message > fallback
-        let msg = 'Booking failed.';
-        if (err.detail) msg = err.detail;
-        else if (err.non_field_errors && err.non_field_errors[0]) msg = err.non_field_errors[0];
-        else if (err.errors) {
-          if (typeof err.errors === 'string') msg = err.errors;
-          else {
-            const first = Object.values(err.errors)[0];
-            if (Array.isArray(first)) msg = first[0];
-            else if (typeof first === 'string') msg = first;
-            else msg = JSON.stringify(err.errors);
-          }
-        } else {
-          msg = JSON.stringify(err);
-        }
-        setBookingError(msg || 'Booking failed.');
-        setBookingStatus('error');
       }
-    } catch {
-      setBookingError('Network error. Please try again.');
+    } catch (err) {
+      const msg = err.message || 'Booking failed.';
+      setBookingError(msg);
       setBookingStatus('error');
     }
   };
@@ -671,23 +723,19 @@ export default function HomePage() {
     const fetchPreview = async () => {
       if (!confirmOpen || !selectedCategory || selectedCategory.is_scheduled) return;
       try {
-        const hdrs = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-        const r = await fetch(`${API_BASE}/appointments/unscheduled-count/?category_id=${selectedCategory.id}&status=active`, { headers: hdrs });
+        const d = await apiCall(ENDPOINTS.APPOINTMENTS_UNSCHEDULED_COUNT(selectedCategory.id));
         if (!mounted) return;
-        if (r.ok) {
-          const d = await r.json();
-          setConfirmPreview({ count: d.count || 0, items: [] });
-        } else {
-          setConfirmPreview({ count: 0, items: [] });
-        }
+        setConfirmPreview({ count: d.count || 0, items: [] });
       } catch (e) {
         if (!mounted) return;
         setConfirmPreview({ count: 0, items: [] });
       }
     };
     fetchPreview();
-    return () => { mounted = false; };
-  }, [confirmOpen, selectedCategory, token]);
+    return () => {
+      mounted = false;
+    };
+  }, [confirmOpen, selectedCategory]);
 
   // Calculate estimated wait time when preview count or selected category changes
   useEffect(() => {
@@ -714,7 +762,9 @@ export default function HomePage() {
         setNextPageUrl(null);
         setPage(1);
         // abort any inflight search when query cleared
-        try { if (searchAbortRef.current) searchAbortRef.current.abort(); } catch (e) {}
+        try {
+          if (searchAbortRef.current) searchAbortRef.current.abort();
+        } catch (e) {}
       });
       return undefined;
     }
@@ -727,7 +777,9 @@ export default function HomePage() {
     searchDebounceRef.current = setTimeout(() => {
       handleSearch(query, 1);
     }, 300);
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
   }, [query, handleSearch]);
 
   const handleCloseConfirm = () => {
@@ -759,7 +811,17 @@ export default function HomePage() {
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navbar />
 
-      <Box sx={{ maxWidth: 1100, mx: 'auto', px: { xs: 2, sm: 3 }, py: 4, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Box
+        sx={{
+          maxWidth: 1100,
+          mx: 'auto',
+          px: { xs: 2, sm: 3 },
+          py: 4,
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {/* Hero */}
         <Fade in timeout={400}>
           <Box sx={{ mb: 4, textAlign: 'center' }}>
@@ -791,7 +853,11 @@ export default function HomePage() {
               <SearchIcon sx={{ fontSize: 15 }} /> Search
             </Link>
             {selectedOrg && (
-              <Typography color="primary" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography
+                color="primary"
+                fontWeight={700}
+                sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+              >
                 <BusinessOutlinedIcon sx={{ fontSize: 15 }} />
                 {selectedOrg.name}
               </Typography>
@@ -826,7 +892,14 @@ export default function HomePage() {
                     ),
                     endAdornment: query && (
                       <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => { setQuery(''); setOrgs([]); setSearchError(''); }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setQuery('');
+                            setOrgs([]);
+                            setSearchError('');
+                          }}
+                        >
                           <ClearIcon fontSize="small" />
                         </IconButton>
                       </InputAdornment>
@@ -837,7 +910,10 @@ export default function HomePage() {
                 <Button
                   variant="contained"
                   color="primary"
-                  onClick={() => { skipDebounceRef.current = true; handleSearch(query, 1); }}
+                  onClick={() => {
+                    skipDebounceRef.current = true;
+                    handleSearch(query, 1);
+                  }}
                   disabled={searching || !query.trim()}
                   sx={{ minWidth: 110, borderRadius: 3, px: 3, color: '#fff' }}
                 >
@@ -855,16 +931,38 @@ export default function HomePage() {
               {searchFocused && (!query || query.trim() === '') && recentSearches.length > 0 && (
                 <Box sx={{ maxWidth: 620, mx: 'auto', mb: 2 }}>
                   <Paper sx={{ p: 1, borderRadius: 2 }} elevation={2}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Typography variant="subtitle2" sx={{ px: 1, pb: 1 }}>Recent searches</Typography>
-                      <Button size="small" onClick={() => {
-                        setRecentSearches([]);
-                        try { localStorage.removeItem('recentSearches'); } catch (e) {}
-                      }}>Clear all</Button>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ px: 1, pb: 1 }}>
+                        Recent searches
+                      </Typography>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setRecentSearches([]);
+                          try {
+                            localStorage.removeItem('recentSearches');
+                          } catch (e) {}
+                        }}
+                      >
+                        Clear all
+                      </Button>
                     </Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                       {recentSearches.map((r) => (
-                        <Box key={r} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box
+                          key={r}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
                           <Button
                             variant="text"
                             onMouseDown={(e) => e.preventDefault()}
@@ -879,11 +977,16 @@ export default function HomePage() {
                           >
                             {r}
                           </Button>
-                          <IconButton size="small" onClick={() => {
-                            const cur = recentSearches.filter((s) => s !== r);
-                            setRecentSearches(cur);
-                            try { localStorage.setItem('recentSearches', JSON.stringify(cur)); } catch (e) {}
-                          }}>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              const cur = recentSearches.filter((s) => s !== r);
+                              setRecentSearches(cur);
+                              try {
+                                localStorage.setItem('recentSearches', JSON.stringify(cur));
+                              } catch (e) {}
+                            }}
+                          >
                             <ClearIcon fontSize="small" />
                           </IconButton>
                         </Box>
@@ -932,7 +1035,11 @@ export default function HomePage() {
                     ))}
                     {hasMore && (
                       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-                        <Button variant="outlined" onClick={() => handleSearch(query, page + 1)} disabled={searching}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => handleSearch(query, page + 1)}
+                          disabled={searching}
+                        >
                           {searching ? <CircularProgress size={18} /> : 'Load more'}
                         </Button>
                       </Box>
@@ -963,7 +1070,10 @@ export default function HomePage() {
               {/* Org hero banner — matches OrgBookingPage style */}
               <Box
                 sx={{
-                  background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)',
+                  background: (theme) =>
+                    theme.palette.custom
+                      ? theme.palette.custom.gradientPrimary
+                      : 'var(--gradient-primary)',
                   color: '#fff',
                   borderRadius: 4,
                   pt: 2.5,
@@ -1007,7 +1117,12 @@ export default function HomePage() {
                 </Box>
 
                 {/* Org name */}
-                <Typography variant="h6" fontWeight={800} align="center" sx={{ lineHeight: 1.25, mb: 0.5 }}>
+                <Typography
+                  variant="h6"
+                  fontWeight={800}
+                  align="center"
+                  sx={{ lineHeight: 1.25, mb: 0.5 }}
+                >
                   {selectedOrg?.name}
                 </Typography>
 
@@ -1017,43 +1132,94 @@ export default function HomePage() {
                     <Chip
                       label={selectedOrg.type}
                       size="small"
-                      sx={{ height: 20, fontSize: 11, fontWeight: 600, bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}
+                      sx={{
+                        height: 20,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        bgcolor: 'rgba(255,255,255,0.2)',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                      }}
                     />
                   </Box>
                 )}
 
                 {/* City / state */}
-                {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country].filter(Boolean).length > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.4, mb: 0.75 }}>
+                {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country].filter(Boolean)
+                  .length > 0 && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: 0.4,
+                      mb: 0.75,
+                    }}
+                  >
                     <LocationOnOutlinedIcon sx={{ fontSize: 13, opacity: 0.8 }} />
                     <Typography variant="body2" sx={{ opacity: 0.85 }}>
-                      {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country].filter(Boolean).join(', ')}
+                      {[selectedOrg?.city, selectedOrg?.state, selectedOrg?.country]
+                        .filter(Boolean)
+                        .join(', ')}
                     </Typography>
                   </Box>
                 )}
 
                 {/* Address */}
-                {selectedOrg?.address_line1 && (() => {
-                  const addrParts = [selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode].filter(Boolean);
-                  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode, selectedOrg.city].filter(Boolean).join(', '))}`;
-                  return (
-                    <Box
-                      component="a"
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, textDecoration: 'none', px: { xs: 0.5, sm: 1 }, mb: 0.5 }}
-                    >
-                      <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#e53935', borderRadius: '6px', width: 22, height: 22, flexShrink: 0, mt: '1px', boxShadow: '0 2px 6px rgba(229,57,53,0.4)' }}>
-                        <MapIcon sx={{ fontSize: 13, color: '#fff' }} />
+                {selectedOrg?.address_line1 &&
+                  (() => {
+                    const addrParts = [
+                      selectedOrg.address_line1,
+                      selectedOrg.address_line2,
+                      selectedOrg.pincode,
+                    ].filter(Boolean);
+                    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([selectedOrg.address_line1, selectedOrg.address_line2, selectedOrg.pincode, selectedOrg.city].filter(Boolean).join(', '))}`;
+                    return (
+                      <Box
+                        component="a"
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 0.75,
+                          textDecoration: 'none',
+                          px: { xs: 0.5, sm: 1 },
+                          mb: 0.5,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            bgcolor: '#e53935',
+                            borderRadius: '6px',
+                            width: 22,
+                            height: 22,
+                            flexShrink: 0,
+                            mt: '1px',
+                            boxShadow: '0 2px 6px rgba(229,57,53,0.4)',
+                          }}
+                        >
+                          <MapIcon sx={{ fontSize: 13, color: '#fff' }} />
+                        </Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'rgba(255,255,255,0.9)',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere',
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {addrParts.join(', ')}
+                        </Typography>
                       </Box>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', wordBreak: 'break-word', overflowWrap: 'anywhere', lineHeight: 1.5 }}>
-                        {addrParts.join(', ')}
-                      </Typography>
-                    </Box>
-                  );
-                })()}
+                    );
+                  })()}
 
                 {/* Phone */}
                 {selectedOrg?.phone_number && (
@@ -1061,10 +1227,21 @@ export default function HomePage() {
                     component="a"
                     href={`tel:${selectedOrg.phone_number}`}
                     onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75, textDecoration: 'none', px: { xs: 0.5, sm: 1 } }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      textDecoration: 'none',
+                      px: { xs: 0.5, sm: 1 },
+                    }}
                   >
-                    <PhoneIcon sx={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', flexShrink: 0 }} />
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
+                    <PhoneIcon
+                      sx={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', flexShrink: 0 }}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}
+                    >
                       {selectedOrg.phone_number}
                     </Typography>
                   </Box>
@@ -1078,7 +1255,13 @@ export default function HomePage() {
               {loadingCats && (
                 <Grid container spacing={2}>
                   {[...Array(4)].map((_, i) => (
-                    <Grid item xs={12} sm={6} key={i} sx={{ display: 'flex', alignItems: 'stretch' }}>
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      key={i}
+                      sx={{ display: 'flex', alignItems: 'stretch' }}
+                    >
                       <Card>
                         <CardContent>
                           <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -1095,7 +1278,11 @@ export default function HomePage() {
                 </Grid>
               )}
 
-              {catError && <Alert severity="info" sx={{ borderRadius: 2 }}>{catError}</Alert>}
+              {catError && (
+                <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  {catError}
+                </Alert>
+              )}
 
               {!loadingCats && categories.length > 0 && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1136,8 +1323,14 @@ export default function HomePage() {
         error={bookingError}
         onConfirm={handleConfirmBooking}
         onBookAnother={handleCloseConfirm}
-        onViewAppointments={() => { handleCloseConfirm(); navigate('/appointments'); }}
-        onViewAppointment={() => { handleCloseConfirm(); navigate('/appointments', { state: { openApptId: bookingResult?.id } }); }}
+        onViewAppointments={() => {
+          handleCloseConfirm();
+          navigate('/appointments');
+        }}
+        onViewAppointment={() => {
+          handleCloseConfirm();
+          navigate('/appointments', { state: { openApptId: bookingResult?.id } });
+        }}
         preview={confirmPreview}
         note={confirmNote}
         onNoteChange={setConfirmNote}

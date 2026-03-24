@@ -134,29 +134,36 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
         window.dispatchEvent(new CustomEvent('sqip:postLogin', {
           detail: { from: redirectFrom, preSelectOrg, preSelectCat },
         }));
-        // If the login was triggered to go to a specific organization/category (booking flow), honor that.
+        
+        // If this login was opened with a pre-selected org+category (booking flow),
+        // prefer not to force a navigation away — close the dialog and let
+        // page-specific post-login handlers (they listen for 'sqip:postLogin')
+        // open the booking flow in-place. This preserves the user's starting
+        // context (e.g., staying on /org/:id) instead of always navigating.
         if (preSelectOrg && preSelectCat) {
           if (onClose) onClose();
-          navigate('/', { state: { preSelectOrg, preSelectCat }, replace: true });
-        // Otherwise, if the user is an admin (staff, superuser, org-admin or group-based admin),
-        // send them to the Admin area regardless of redirectFrom so they land on the Admin tab.
-        } else if (isAdmin) {
-          if (onClose) onClose();
-          navigate('/admin', { replace: true });
-        } else if (redirectFrom && redirectFrom !== '/login') {
-          if (onClose) onClose();
-          navigate(redirectFrom, { replace: true });
-        } else {
-          if (onClose) onClose();
-          navigate('/', { replace: true });
+          return;
         }
+
+        // Determine redirect destination with proper priority.
+        // Priority A: If user is an admin, take them to the admin dashboard by default.
+        // Priority B: If a non-admin user has an explicit redirectFrom (and it's not /login), honor it.
+        // Note: preSelectOrg+preSelectCat handled above and returns early.
+        let destination = '/';
+        if (isAdmin) {
+          destination = '/admin';
+        } else if (redirectFrom && redirectFrom !== '/login') {
+          destination = redirectFrom;
+        }
+        if (onClose) onClose();
+        navigate(destination, { replace: true });
       } else {
         if (onClose) onClose();
-        navigate(redirectFrom, { replace: true });
+        navigate(redirectFrom || '/', { replace: true });
       }
     } catch {
       if (onClose) onClose();
-      navigate(redirectFrom, { replace: true });
+      navigate(redirectFrom || '/', { replace: true });
     }
   };
 
