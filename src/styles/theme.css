@@ -16,7 +16,6 @@
 }
 
 html, body, #root {
-  min-height: 100vh;
   background: var(--bg);
   color: var(--text-primary);
   font-family: Inter, "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial;
@@ -62,8 +61,7 @@ html {
 
 /* Fix iOS momentum scroll bounce - prevent page zoom/bounce at scroll edges */
 body {
-  user-select: none;
-  -webkit-user-select: none;
+  /* keep overscroll behavior to avoid scroll chaining, but allow selection on Android */
   -webkit-touch-callout: none;
   overscroll-behavior: contain;
 }
@@ -71,17 +69,16 @@ body {
 /* Prevent rubber band / bounce effect on iOS */
 html, body {
   width: 100%;
-  min-height: 100vh;
-  /* allow default scrolling on the document, don't completely hide overflow */
-  overflow: auto;
+  height: 100%;
 }
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y; /* ensure touch-driven vertical scrolling works on Android */
   /* Use relative positioning so elements like bottom cards are not clipped.
      Add safe-area padding to prevent content from being hidden by on-screen
      gesture areas (iPhone) or bottom bars. */
