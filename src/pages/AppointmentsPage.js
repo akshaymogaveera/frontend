@@ -137,8 +137,8 @@ function AppointmentRow({ appt, onClick }) {
               : formatServerDateTime(appt.scheduled_time)}`
             : ' · 🚶 Walk-in'}
         </Typography>
-        {/* Estimated wait time for walk-in appointments */}
-        {!appt.is_scheduled && appt.counter != null && appt.counter > 0 && appt.category_estimated_time > 0 && (
+        {/* Estimated wait time for walk-in appointments - only show if active */}
+        {appt.status === 'active' && !appt.is_scheduled && appt.counter != null && appt.counter > 0 && appt.category_estimated_time > 0 && (
           <Typography variant="caption" sx={{ color: 'warning.dark', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
             ⏱ ~{(() => {
               const mins = (appt.counter - 1) * appt.category_estimated_time;
@@ -152,8 +152,8 @@ function AppointmentRow({ appt, onClick }) {
 
       {/* Right side */}
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 2, flexShrink: 0 }}>
-        <Typography variant="caption" color="text.disabled">
-          {formatDateLocal(appt.date_created)}
+        <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600 }}>
+          {appt.is_scheduled ? (appt.scheduled_time ? formatServerDateTime(appt.scheduled_time) : 'TBD') : formatDateLocal(new Date())}
         </Typography>
         <ChevronRightIcon sx={{ fontSize: 18, color: 'text.disabled', mt: 0.3 }} />
       </Box>
@@ -165,6 +165,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const token = localStorage.getItem('accessToken');
+  const [user, setUser] = useState(null);
 
   // Notes state
   const [notes, setNotes] = useState([]);
@@ -173,6 +174,29 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
   const [submittingNote, setSubmittingNote] = useState(false);
   const [noteError, setNoteError] = useState('');
   const [notesExpanded, setNotesExpanded] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+
+  // Fetch user info on component mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const hdrs = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const res = await fetch(`${API_BASE}/me/`, { headers: hdrs });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+        }
+      } catch (e) { /* ignore */ }
+    };
+    if (token) fetchUser();
+  }, [token]);
+
+  // Check if user is admin for this appointment's category
+  const isUserAdmin = () => {
+    if (!user || !appt) return false;
+    return user.is_staff || user.is_superuser || (user.groups && user.groups.some(g => g.id === appt.category_group_id));
+  };
 
   // Stable refs so async callbacks always get latest values
   const tokenRef = React.useRef(token);
@@ -210,30 +234,70 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
 
   const handleAddUserNote = async () => {
     const a = apptRef.current;
-    if (!noteText.trim()) {
-      setNoteError('Please write a note before submitting.');
+    if (!noteText.trim() && !uploadedFile) {
+      setNoteError('Please write a note or attach a file before submitting.');
       return;
     }
     setNoteError('');
     setSubmittingNote(true);
     const hdrs = { Authorization: `Bearer ${tokenRef.current}`, 'Content-Type': 'application/json' };
+    
     try {
-      const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, {
-        method: 'POST',
-        headers: hdrs,
-        body: JSON.stringify({ content: noteText.trim() }),
-      });
-      if (res.ok) {
-        setNoteText('');
-        await doFetchNotes.current();
+      const payload = { content: noteText.trim() };
+      
+      // If file was uploaded, convert to base64 and include in payload
+      if (uploadedFile) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            payload.file_data = e.target.result; // base64 data URL
+            payload.file_name = uploadedFileName;
+            payload.file_mime = uploadedFile.type;
+            
+            const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, {
+              method: 'POST',
+              headers: hdrs,
+              body: JSON.stringify(payload),
+            });
+            
+            if (res.ok) {
+              setNoteText('');
+              setUploadedFile(null);
+              setUploadedFileName('');
+              await doFetchNotes.current();
+            } else {
+              const err = await res.json().catch(() => ({}));
+              setNoteError(err?.errors?.content?.[0] || err?.errors?.file_data?.[0] || err?.errors?.notes?.[0] || err?.errors || 'Failed to add note');
+            }
+            setSubmittingNote(false);
+          } catch (error) {
+            setNoteError('Failed to process file');
+            setSubmittingNote(false);
+          }
+        };
+        reader.readAsDataURL(uploadedFile);
       } else {
-        const err = await res.json().catch(() => ({}));
-        setNoteError(err?.errors?.content?.[0] || err?.errors || 'Failed to add note');
+        // No file, just send content
+        const res = await fetch(`${API_BASE}/appointments/${a.id}/notes/`, {
+          method: 'POST',
+          headers: hdrs,
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          setNoteText('');
+          setUploadedFile(null);
+          setUploadedFileName('');
+          await doFetchNotes.current();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          setNoteError(err?.errors?.content?.[0] || err?.errors?.notes?.[0] || err?.errors || 'Failed to add note');
+        }
+        setSubmittingNote(false);
       }
     } catch {
       setNoteError('Network error');
+      setSubmittingNote(false);
     }
-    setSubmittingNote(false);
   };
 
   const handleDownloadFile = async (noteId) => {
@@ -509,7 +573,7 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
                 size="small"
                 multiline
                 minRows={2}
-                placeholder="Note for the staff (optional)"
+                placeholder="Add a note (optional)"
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value.slice(0, 1000))}
                 inputProps={{ maxLength: 1000 }}
@@ -517,13 +581,48 @@ function AppointmentDetailDrawer({ appt, open, onClose, onCancel, onRefresh, ref
                 FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
               />
+              
+              {/* File upload section - only for admins */}
+              {isUserAdmin() && (
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Button
+                    component="label"
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12, flex: 1 }}
+                  >
+                    📎 Attach File
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          setUploadedFile(e.target.files[0]);
+                          setUploadedFileName(e.target.files[0].name);
+                          setNoteError('');
+                        }
+                      }}
+                    />
+                  </Button>
+                  {uploadedFileName && (
+                    <Button
+                      size="small"
+                      sx={{ borderRadius: 2, textTransform: 'none', fontSize: 11, px: 1.5, color: 'text.secondary', flex: 1, justifyContent: 'space-between' }}
+                    >
+                      ✅ {uploadedFileName}
+                    </Button>
+                  )}
+                </Box>
+              )}
+              
               {noteError && <Typography variant="caption" color="error">{noteError}</Typography>}
               <Button
                 size="small"
                 variant="outlined"
                 startIcon={submittingNote ? <CircularProgress size={13} /> : <NoteAddOutlinedIcon sx={{ fontSize: 15 }} />}
                 onClick={handleAddUserNote}
-                disabled={submittingNote}
+                disabled={submittingNote || (!noteText.trim() && !uploadedFile)}
                 sx={{ borderRadius: 2, textTransform: 'none', fontSize: 12, alignSelf: 'flex-end' }}
               >
                 {submittingNote ? 'Saving…' : 'Add Note'}

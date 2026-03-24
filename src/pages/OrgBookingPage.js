@@ -21,6 +21,7 @@ import {
   Divider,
   Paper,
   Tooltip,
+  Collapse,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -35,6 +36,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import MapIcon from '@mui/icons-material/Map';
 import LocalPhoneOutlinedIcon from '@mui/icons-material/LocalPhoneOutlined';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
+import AddIcon from '@mui/icons-material/Add';
 import BookingConfirmDialog from '../components/BookingConfirmDialog.js';
 import SchedulerDialog from '../components/SchedulerDialog.js';
 
@@ -161,6 +163,7 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState({ count: 0, items: [] });
   const [userNote, setUserNote] = useState('');
+  const [noteExpanded, setNoteExpanded] = useState(false);
 
   const token = localStorage.getItem('accessToken');
 
@@ -247,54 +250,70 @@ function WalkInDialog({ open, onClose, category, orgId, onSuccess, onError }) {
   return (
     <Dialog open={open} onClose={() => !loading && onClose()} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}>
       <Box sx={{ height: 4, background: (theme) => theme.palette.custom ? theme.palette.custom.gradientPrimary : 'var(--gradient-primary)' }} />
-      <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <DialogTitle sx={{ fontWeight: 700, pb: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         Join Walk-in Queue
         <Button size="small" onClick={() => !loading && onClose()} sx={{ color: 'text.secondary' }} startIcon={<CloseIcon />}>Close</Button>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{ pt: 1.5 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>You're about to join the queue.</Typography>
+        
         {preview && preview.count > 0 && (
-          <Box sx={{ mb: 1.5 }}>
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(255,152,0,0.08)', borderRadius: 2, border: '1px solid rgba(255,152,0,0.2)' }}>
             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {`There ${preview.count === 1 ? 'is' : 'are'} ${preview.count} ${preview.count === 1 ? 'person' : 'people'} currently waiting.`}
+              {`There ${preview.count === 1 ? 'is' : 'are'} ${preview.count} ${preview.count === 1 ? 'person' : 'people'} waiting.`}
             </Typography>
             <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
-            {/* Show estimated wait if category has estimated_time (minutes per person) */}
             {category?.estimated_time > 0 && (() => {
               const waitStr = formatWaitMinutes(preview.count * category.estimated_time);
               return waitStr ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.75, bgcolor: 'rgba(255,152,0,0.08)', border: '1px solid rgba(255,152,0,0.25)', borderRadius: 1.5, px: 1.25, py: 0.5, width: 'fit-content' }}>
-                  <AccessTimeOutlinedIcon sx={{ fontSize: 14, color: 'warning.main' }} />
-                  <Typography variant="caption" color="warning.dark" fontWeight={700}>
-                    Estimated wait: ~{waitStr}
-                  </Typography>
-                </Box>
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontWeight: 600, color: 'warning.main' }}>
+                  ⏱ Estimated wait: ~{waitStr}
+                </Typography>
               ) : null;
             })()}
           </Box>
         )}
+        
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           You are joining the walk-in queue for <strong>{category?.name || category?.description}</strong>.
         </Typography>
-        {/* Optional note */}
-        <TextField
-          size="small"
-          multiline
-          minRows={2}
-          fullWidth
-          placeholder="Note for the staff (optional)"
-          value={userNote}
-          onChange={(e) => setUserNote(e.target.value.slice(0, 1000))}
-          inputProps={{ maxLength: 1000 }}
-          helperText={`${userNote.length}/1000`}
-          FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
-          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
-        />
+        
+        {/* Collapsible Add Note Section */}
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            startIcon={<AddIcon />}
+            onClick={() => setNoteExpanded(!noteExpanded)}
+            variant="text"
+            size="small"
+            sx={{ textTransform: 'none', fontWeight: 600, mb: 1 }}
+          >
+            Add Note (Optional)
+          </Button>
+          <Collapse in={noteExpanded}>
+            <TextField
+              size="small"
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Note for the staff"
+              value={userNote}
+              onChange={(e) => setUserNote(e.target.value.slice(0, 1000))}
+              inputProps={{ maxLength: 1000 }}
+              helperText={`${userNote.length}/1000`}
+              FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+            />
+          </Collapse>
+        </Box>
+        
         {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>Cancel</Button>
+        <Button onClick={onClose} variant="outlined" disabled={loading} sx={{ borderRadius: 2 }}>Cancel</Button>
         {!(error && /already exist/i.test(error)) && (
-          <Button onClick={handleBook} variant="contained" color="primary" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />} sx={{ borderRadius: 2 }}>{loading ? 'Booking…' : 'Confirm'}</Button>
+          <Button onClick={handleBook} variant="contained" color="primary" disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null} sx={{ borderRadius: 2 }}>
+            {loading ? 'Booking…' : 'Confirm'}
+          </Button>
         )}
       </DialogActions>
     </Dialog>
@@ -549,7 +568,7 @@ export default function OrgBookingPage() {
         )}
       </Box>
 
-      <Box sx={{ flex: 1, maxWidth: isMobile ? '100%' : 720, mx: 'auto', width: '100%', px: isMobile ? 1.5 : 3, py: 3 }}>
+      <Box sx={{ flex: 1, maxWidth: isMobile ? '100%' : 720, mx: 'auto', width: '100%', px: isMobile ? 1.5 : 3, py: 3, pb: isMobile ? '20vh' : 3 }}>
   {/* Removed redirecting banner — booking confirmation dialog will open instead */}
         <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>{categories.length === 0 ? 'No services available' : 'Available Services'}</Typography>
         {categories.length === 0 && (<Typography variant="body2" color="text.secondary">This organisation has no active services at the moment.</Typography>)}

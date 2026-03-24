@@ -51,6 +51,16 @@ import SchedulerDialog from '../components/SchedulerDialog.js';
 
 const API_BASE = '/api';
 
+/** Format total minutes into a human-readable string, e.g. 90 → "1 hr 30 min" */
+function formatWaitMinutes(totalMins) {
+  if (!totalMins || totalMins <= 0) return null;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h > 0 && m > 0) return `${h} hr ${m} min`;
+  if (h > 0) return `${h} hr`;
+  return `${m} min`;
+}
+
 const orgTypeColors = {
   restaurant: '#e67e22',
   clinic: '#27ae60',
@@ -375,8 +385,13 @@ export default function HomePage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmPreview, setConfirmPreview] = useState({ count: 0, items: [] });
   const [confirmNote, setConfirmNote] = useState('');
+  const [estimatedTime, setEstimatedTime] = useState(null);
   // Scheduled appointment state
   const [scheduledOpen, setScheduledOpen] = useState(false);
+
+  // Mobile detection
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const token = localStorage.getItem('accessToken');
   const userId = localStorage.getItem('userId');
@@ -674,6 +689,18 @@ export default function HomePage() {
     return () => { mounted = false; };
   }, [confirmOpen, selectedCategory, token]);
 
+  // Calculate estimated wait time when preview count or selected category changes
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      if (selectedCategory && selectedCategory.estimated_time && confirmPreview.count > 0) {
+        const waitStr = formatWaitMinutes(confirmPreview.count * selectedCategory.estimated_time);
+        setEstimatedTime(waitStr);
+      } else {
+        setEstimatedTime(null);
+      }
+    });
+  }, [confirmPreview, selectedCategory]);
+
   // Debounced live search when user types
   useEffect(() => {
     // clear pending timer
@@ -732,7 +759,7 @@ export default function HomePage() {
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <Navbar />
 
-      <Box sx={{ maxWidth: 1100, mx: 'auto', px: { xs: 2, sm: 3 }, py: 4 }}>
+      <Box sx={{ maxWidth: 1100, mx: 'auto', px: { xs: 2, sm: 3 }, py: 4, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         {/* Hero */}
         <Fade in timeout={400}>
           <Box sx={{ mb: 4, textAlign: 'center' }}>
@@ -932,7 +959,7 @@ export default function HomePage() {
         {/* STEP 2: Categories */}
         {step === 'categories' && (
           <Fade in timeout={300}>
-            <Box>
+            <Box sx={{ pb: isMobile ? '20vh' : 0, display: 'flex', flexDirection: 'column' }}>
               {/* Org hero banner — matches OrgBookingPage style */}
               <Box
                 sx={{
@@ -1114,6 +1141,7 @@ export default function HomePage() {
         preview={confirmPreview}
         note={confirmNote}
         onNoteChange={setConfirmNote}
+        estimatedTime={estimatedTime}
       />
     </Box>
   );

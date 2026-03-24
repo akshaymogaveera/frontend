@@ -13,26 +13,12 @@ import {
   MenuItem,
   Divider,
   Tooltip,
-  useScrollTrigger,
-  Slide,
 } from '@mui/material';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
-
-function HideOnScroll({ children }) {
-  const trigger = useScrollTrigger({
-    disableHysteresis: false,
-    threshold: 50,
-  });
-  return (
-    <Slide appear={false} direction="down" in={!trigger}>
-      {children}
-    </Slide>
-  );
-}
 
 function Navbar() {
   const navigate = useNavigate();
@@ -189,17 +175,16 @@ function Navbar() {
   ];
 
   return (
-    <HideOnScroll>
-      <AppBar
-        position="sticky"
-        elevation={0}
-        sx={{
-          background: 'rgba(255,255,255,0.95)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(0,0,0,0.08)',
-          color: 'text.primary',
-        }}
-      >
+    <AppBar
+      position="sticky"
+      elevation={0}
+      sx={{
+        background: 'rgba(255,255,255,0.95)',
+        backdropFilter: 'blur(12px)',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        color: 'text.primary',
+      }}
+    >
         <Toolbar sx={{ maxWidth: 1100, width: '100%', mx: 'auto', px: { xs: 2, sm: 3 } }}>
           {/* Logo */}
           <Box
@@ -372,8 +357,7 @@ function Navbar() {
           )}
         </Toolbar>
       </AppBar>
-    </HideOnScroll>
-  );
+    );
 }
 
 export default Navbar;

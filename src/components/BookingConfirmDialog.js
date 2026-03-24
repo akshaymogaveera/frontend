@@ -1,8 +1,9 @@
-import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Box, Typography, Button, IconButton, TextField } from '@mui/material';
+import React, { useState } from 'react';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Box, Typography, Button, IconButton, TextField, Collapse } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
+import AddIcon from '@mui/icons-material/Add';
 
 const NOTE_MAX = 1000;
 
@@ -19,7 +20,9 @@ export default function BookingConfirmDialog({
   preview = null,
   note = '',
   onNoteChange = null,
+  estimatedTime = null,
 }) {
+  const [noteExpanded, setNoteExpanded] = useState(false);
   return (
     <Dialog
       open={Boolean(open)}
@@ -40,26 +43,44 @@ export default function BookingConfirmDialog({
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>You're about to join the queue.</Typography>
             {preview && preview.count > 0 && (
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{`There are ${preview.count} people currently waiting.`}</Typography>
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: 'rgba(255,152,0,0.08)', borderRadius: 2, border: '1px solid rgba(255,152,0,0.2)' }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>{`There ${preview.count === 1 ? 'is' : 'are'} ${preview.count} ${preview.count === 1 ? 'person' : 'people'} waiting.`}</Typography>
                 <Typography variant="caption" color="text.secondary">You'll be added after them.</Typography>
+                {estimatedTime && (
+                  <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontWeight: 600, color: 'warning.main' }}>
+                    ⏱ Estimated wait: ~{estimatedTime}
+                  </Typography>
+                )}
               </Box>
             )}
+            
+            {/* Collapsible Add Note Section */}
             {onNoteChange && (
               <Box sx={{ mt: 1.5 }}>
-                <TextField
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={() => setNoteExpanded(!noteExpanded)}
+                  variant="text"
                   size="small"
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  placeholder="Note for the staff (optional)"
-                  value={note}
-                  onChange={(e) => onNoteChange(e.target.value.slice(0, NOTE_MAX))}
-                  inputProps={{ maxLength: NOTE_MAX }}
-                  helperText={`${note.length}/${NOTE_MAX}`}
-                  FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
-                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
-                />
+                  sx={{ textTransform: 'none', fontWeight: 600, mb: 1 }}
+                >
+                  Add Note (Optional)
+                </Button>
+                <Collapse in={noteExpanded}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="Note for the staff"
+                    value={note}
+                    onChange={(e) => onNoteChange(e.target.value.slice(0, NOTE_MAX))}
+                    inputProps={{ maxLength: NOTE_MAX }}
+                    helperText={`${note.length}/${NOTE_MAX}`}
+                    FormHelperTextProps={{ sx: { textAlign: 'right', mr: 0 } }}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, fontSize: '0.85rem' } }}
+                  />
+                </Collapse>
               </Box>
             )}
           </Box>
