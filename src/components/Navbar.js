@@ -328,6 +328,11 @@ function Navbar() {
                   </Box>
                 </Box>
                 <Divider />
+                <MenuItem onClick={() => { navigate('/profile?optional=1'); handleMenuClose(); }} sx={{ gap: 1.5, py: 1 }}>
+                  <AccountCircleOutlinedIcon sx={{ fontSize: 18 }} />
+                  <Typography variant="body2">Update profile</Typography>
+                </MenuItem>
+                <Divider />
                 {navItems.filter(item => !item.public).map((item) => (
                   <MenuItem
                     key={item.path}

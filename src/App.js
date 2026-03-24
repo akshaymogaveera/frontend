@@ -6,6 +6,7 @@ import { LoginModalProvider } from './contexts/LoginModalContext.js';
 import HomePage from './pages/HomePage.js';
 import AppointmentsPage from './pages/AppointmentsPage.js';
 import AdminPage from './pages/AdminPage.js';
+import ProfilePage from './pages/ProfilePage.js';
 import OrgBookingPage from './pages/OrgBookingPage.js';
 
 const theme = createTheme({
@@ -128,6 +129,14 @@ function App() {
                 <AdminRoute>
                   <AdminPage />
                 </AdminRoute>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />
