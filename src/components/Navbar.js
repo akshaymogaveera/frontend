@@ -235,7 +235,7 @@ function Navbar() {
             <Typography
               sx={{
                 fontWeight: 900,
-                fontSize: 22,
+                fontSize: 24,
                 letterSpacing: -0.5,
                 color: 'text.primary',
                 lineHeight: 1.1,
@@ -246,7 +246,7 @@ function Navbar() {
             <Typography
               sx={{
                 fontWeight: 400,
-                fontSize: 10,
+                fontSize: 12,
                 letterSpacing: 0.3,
                 color: 'text.secondary',
                 textTransform: 'lowercase',

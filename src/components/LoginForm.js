@@ -332,7 +332,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
           <Typography
             sx={{
               fontWeight: 900,
-              fontSize: 20,
+              fontSize: 24,
               letterSpacing: -0.5,
               color: 'text.primary',
               lineHeight: 1.1,
@@ -343,7 +343,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
           <Typography
             sx={{
               fontWeight: 400,
-              fontSize: 10,
+              fontSize: 12,
               letterSpacing: 0.3,
               color: 'text.secondary',
               textTransform: 'lowercase',
