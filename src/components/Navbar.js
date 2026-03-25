@@ -207,7 +207,7 @@ function Navbar() {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
+            gap: 0.75,
             cursor: 'pointer',
             flexGrow: { xs: 1, sm: 0 },
             mr: { sm: 4 },
@@ -215,34 +215,47 @@ function Navbar() {
         >
           <Box
             sx={{
-              width: 32,
-              height: 32,
+              width: 44,
+              height: 44,
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: (theme) =>
-                `0 2px 8px ${theme.palette.custom ? 'rgba(0,123,255,0.14)' : 'rgba(0,0,0,0.08)'}`,
+                `0 2px 8px ${theme.palette.custom ? 'rgba(130,172,87,0.14)' : 'rgba(0,0,0,0.08)'}`,
               background: (theme) =>
                 theme.palette.custom
-                  ? `linear-gradient(135deg, ${theme.palette.custom.teal} 0%, ${theme.palette.primary.main} 100%)`
-                  : 'linear-gradient(135deg,#00C4CC,#007BFF)',
+                  ? theme.palette.custom.green || '#82ac57'
+                  : '#82ac57',
             }}
           >
-            <Typography sx={{ color: '#fff', fontWeight: 900, fontSize: 14, lineHeight: 1 }}>
-              S
+            <EventNoteOutlinedIcon sx={{ color: '#fff', fontSize: 26 }} />
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography
+              sx={{
+                fontWeight: 900,
+                fontSize: 22,
+                letterSpacing: -0.5,
+                color: 'text.primary',
+                lineHeight: 1.1,
+              }}
+            >
+              sqip
+            </Typography>
+            <Typography
+              sx={{
+                fontWeight: 400,
+                fontSize: 10,
+                letterSpacing: 0.3,
+                color: 'text.secondary',
+                textTransform: 'lowercase',
+                lineHeight: 1,
+              }}
+            >
+              skip the queue
             </Typography>
           </Box>
-          <Typography
-            sx={{
-              fontWeight: 900,
-              fontSize: 22,
-              letterSpacing: -0.5,
-              color: 'text.primary',
-            }}
-          >
-            sqip
-          </Typography>
         </Box>
 
         {/* Nav Links */}

@@ -18,6 +18,7 @@ import {
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PhoneOutlinedIcon from '@mui/icons-material/PhoneOutlined';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
 import { parseJwt } from '../utils/api.js';
 
 /* ──────────────────────────────────────────
@@ -308,14 +309,51 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
     <Box sx={{ px, pt, pb, width: '100%' }}>
 
       {/* ────── Header ────── */}
-      <Typography
-        variant="h5"
-        fontWeight={700}
-        gutterBottom
-        sx={{ fontSize: compact ? '1.2rem' : '1.5rem', letterSpacing: -0.3 }}
-      >
-        Join SQIP
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: compact ? 2 : 3 }}>
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: (theme) =>
+              `0 2px 8px ${theme.palette.custom ? 'rgba(130,172,87,0.14)' : 'rgba(0,0,0,0.08)'}`,
+            background: (theme) =>
+              theme.palette.custom
+                ? theme.palette.custom.green || '#82ac57'
+                : '#82ac57',
+          }}
+        >
+          <EventNoteOutlinedIcon sx={{ color: '#fff', fontSize: 26 }} />
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <Typography
+            sx={{
+              fontWeight: 900,
+              fontSize: 20,
+              letterSpacing: -0.5,
+              color: 'text.primary',
+              lineHeight: 1.1,
+            }}
+          >
+            sqip
+          </Typography>
+          <Typography
+            sx={{
+              fontWeight: 400,
+              fontSize: 10,
+              letterSpacing: 0.3,
+              color: 'text.secondary',
+              textTransform: 'lowercase',
+              lineHeight: 1,
+            }}
+          >
+            skip the queue
+          </Typography>
+        </Box>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: compact ? 2 : 3, fontSize: compact ? '0.82rem' : '0.875rem' }}>
         Create an account to book appointments seamlessly.
       </Typography>
