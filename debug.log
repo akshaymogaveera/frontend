@@ -1,0 +1,13 @@
+INFO 2026-03-25 20:33:53,375 views User 1 (testuser) validated their token successfully.
+WARNING 2026-03-25 20:33:53,385 log Unauthorized: /api/validate/token/
+WARNING 2026-03-25 20:33:53,689 log Method Not Allowed: /api/validate/token/
+WARNING 2026-03-25 20:33:53,702 log Unauthorized: /api/validate/token/
+INFO 2026-03-25 20:33:54,007 views User 1 (testuser) authenticated successfully.
+WARNING 2026-03-25 20:33:54,010 log Bad Request: /api/auth/
+ERROR 2026-03-25 20:33:54,012 views No user found for identifier 'nonexistentuser'.
+WARNING 2026-03-25 20:33:54,013 log Not Found: /api/auth/
+ERROR 2026-03-25 20:33:54,314 views No user found for identifier 'TESTUSER'.
+WARNING 2026-03-25 20:33:54,315 log Not Found: /api/auth/
+INFO 2026-03-25 20:33:54,619 views User 1 (testuser) authenticated successfully.
+WARNING 2026-03-25 20:33:54,621 log Method Not Allowed: /api/auth/
+WARNING 2026-03-25 20:33:54,623 log Bad Request: /api/auth/

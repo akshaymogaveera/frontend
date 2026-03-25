@@ -18,6 +18,7 @@ import {
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PhoneOutlinedIcon from '@mui/icons-material/PhoneOutlined';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import { parseJwt } from '../utils/api.js';
 
 /* ──────────────────────────────────────────
    Country dial-code list (shared constant)
@@ -169,12 +170,20 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
 
   const storeTokens = (data) => {
     localStorage.setItem('accessToken', data.access);
-    localStorage.setItem('refreshToken', data.refresh);
     localStorage.setItem('userId', data.id);
     localStorage.setItem('username', data.username);
     // persist readable name parts for navbar/profile
     if (data.first_name !== undefined) localStorage.setItem('firstName', data.first_name || '');
     if (data.last_name !== undefined) localStorage.setItem('lastName', data.last_name || '');
+    // store access token expiry (ms since epoch) so the app can proactively refresh
+    try {
+      const payload = parseJwt(data.access);
+      if (payload && payload.exp) {
+        localStorage.setItem('accessTokenExp', String(payload.exp * 1000));
+      }
+    } catch (e) {
+      // ignore parse/storage errors
+    }
   };
 
   /* ── Register ── */

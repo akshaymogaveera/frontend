@@ -81,7 +81,63 @@ export async function apiFetch(url, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, { ...options, headers });
+  let response = await fetch(url, { ...options, headers });
+
+  // If access token expired (401), try to refresh using refresh token and retry once.
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem('refreshToken');
+    // First try: if an explicit refresh token exists in localStorage (backward compat)
+    if (refreshToken) {
+      try {
+        const r = await fetch(`${API_BASE}/token/refresh/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken }),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          // store new access token; preserve refresh token (may rotate depending on backend)
+          if (data.access) {
+            localStorage.setItem('accessToken', data.access);
+            const payload = parseJwt(data.access);
+            if (payload && payload.exp) {
+              localStorage.setItem('accessTokenExp', String(payload.exp * 1000));
+            }
+          }
+          // Retry original request with new access token
+          const newHeaders = { ...headers, Authorization: `Bearer ${localStorage.getItem('accessToken')}` };
+          response = await fetch(url, { ...options, headers: newHeaders });
+          return response;
+        }
+      } catch (e) {
+        // fall through to try cookie-based refresh
+      }
+    }
+
+    // Second try: attempt cookie-based refresh (HttpOnly cookie set by backend).
+    try {
+      const r2 = await fetch(`${API_BASE}/token/refresh/`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (r2.ok) {
+        const data = await r2.json();
+        if (data.access) {
+          localStorage.setItem('accessToken', data.access);
+          const payload = parseJwt(data.access);
+          if (payload && payload.exp) {
+            localStorage.setItem('accessTokenExp', String(payload.exp * 1000));
+          }
+        }
+        const newHeaders = { ...headers, Authorization: `Bearer ${localStorage.getItem('accessToken')}` };
+        response = await fetch(url, { ...options, headers: newHeaders });
+        return response;
+      }
+    } catch (e) {
+      // fall through to return original 401
+    }
+  }
+
   return response;
 }
 
@@ -173,4 +229,28 @@ export async function parseApiResponse(res) {
 export async function apiCall(url, options = {}) {
   const res = await apiFetch(url, options);
   return parseApiResponse(res);
+}
+
+/**
+ * Parse a JWT and return its payload as an object.
+ * Returns null on any parse error.
+ */
+export function parseJwt(token) {
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1];
+    // base64url -> base64
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(b64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
 }

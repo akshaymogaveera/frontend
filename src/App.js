@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import LoginPage from './pages/LoginPage.js';
@@ -8,6 +8,7 @@ import AppointmentsPage from './pages/AppointmentsPage.js';
 import AdminPage from './pages/AdminPage.js';
 import ProfilePage from './pages/ProfilePage.js';
 import OrgBookingPage from './pages/OrgBookingPage.js';
+import { parseJwt } from './utils/api.js';
 
 const theme = createTheme({
   palette: {
@@ -96,6 +97,54 @@ function AdminRoute({ children }) {
 }
 
 function App() {
+  // Proactively attempt to refresh the access token when the app starts
+  // and periodically (every 5 minutes) so users stay logged in as long as
+  // possible without being interrupted by a 401. This uses the refresh
+  // token stored in localStorage and updates accessToken + accessTokenExp.
+  useEffect(() => {
+    let mounted = true;
+    const tryRefresh = async () => {
+      const access = localStorage.getItem('accessToken');
+      const expStr = localStorage.getItem('accessTokenExp');
+      const now = Date.now();
+      const fiveMin = 5 * 60 * 1000;
+
+      // If access exists and is not expiring within 5 minutes, skip refresh
+      if (access && expStr && Number(expStr) - now > fiveMin) return;
+
+      try {
+        // Try cookie-based refresh (backend will also accept JSON body for
+        // backward compatibility). Use credentials so the HttpOnly cookie is sent.
+        const res = await fetch('/api/token/refresh/', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access) {
+            localStorage.setItem('accessToken', data.access);
+            const payload = parseJwt(data.access);
+            if (payload && payload.exp) {
+              localStorage.setItem('accessTokenExp', String(payload.exp * 1000));
+            }
+          }
+          window.dispatchEvent(new Event('sqip:tokenRefreshed'));
+        } else {
+          // refresh failed - clear tokens to force re-login
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('accessTokenExp');
+          window.dispatchEvent(new Event('sqip:loggedOut'));
+        }
+      } catch (e) {
+        // ignore network errors here; we'll try again on next interval
+      }
+    };
+
+    tryRefresh();
+    const id = setInterval(tryRefresh, 5 * 60 * 1000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
