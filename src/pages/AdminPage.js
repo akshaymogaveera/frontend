@@ -2330,7 +2330,7 @@ export default function AdminPage() {
                 )}
 
                 {/* Create Category dialog */}
-                <Dialog open={createDialogOpen} onClose={closeCreateDialog} fullWidth maxWidth="sm">
+                <Dialog open={createDialogOpen} onClose={closeCreateDialog} fullWidth maxWidth="sm" TransitionComponent={Fade} transitionDuration={{ enter: 200, exit: 100 }}>
                   <DialogTitle>Create new category</DialogTitle>
                   <DialogContent>
                     {createError && <Alert severity="error" sx={{ mb: 1 }}>{createError}</Alert>}
@@ -2455,8 +2455,8 @@ export default function AdminPage() {
                                 </Box>
                                 {!isClosed && (
                                   <Box sx={{ mt: 1 }}>
-                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'flex-start' }}>
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
                                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>Opening</Typography>
                                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                                           <TimeInput
@@ -2482,23 +2482,23 @@ export default function AdminPage() {
                                         </Box>
                                       </Box>
 
-                                      <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
-                                        <Button size="small" variant="text" onClick={() => {
+                                      <Box sx={{ display: 'flex', alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
+                                        <Button size="small" variant="text" fullWidth={window.innerWidth < 600} onClick={() => {
                                           setCreateForm((prev) => {
                                             const bh = { ...(prev.break_hours || {}) };
                                             if (bh[day] && bh[day].length > 0) bh[day] = [];
                                             else bh[day] = [['13:00','14:00']];
                                             return { ...prev, break_hours: bh };
                                           });
-                                        }} sx={{ color: 'primary.main', textTransform: 'none', fontSize: 13 }}>{br && br.length > 0 ? 'Remove break' : 'Add break'}</Button>
+                                        }} sx={{ color: 'primary.main', textTransform: 'none', fontSize: 13, whiteSpace: 'nowrap' }}>{br && br.length > 0 ? 'Remove break' : 'Add break'}</Button>
                                       </Box>
                                     </Box>
                                   </Box>
                                 )}
                                 {br && br.length > 0 && (
-                                  <Box sx={{ mt: 1 }}>
-                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                  <Box sx={{ mt: 1, pl: { xs: 0, sm: 1 } }}>
+                                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'flex-start' }}>
+                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
                                         <Typography variant="caption" sx={{ color: 'warning.dark' }}>Break</Typography>
                                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', bgcolor: '#fff7e6', p: 0.5, borderRadius: 1 }}>
                                           <TimeInput
@@ -2672,7 +2672,11 @@ export default function AdminPage() {
                 </Dialog>
 
                 {/* Edit Category dialog */}
-                <Dialog open={editCatDialogOpen} onClose={() => { setEditCatDialogOpen(false); setEditFieldErrors({}); setEditCatError(''); }} fullWidth maxWidth="sm">
+                <Dialog open={editCatDialogOpen} onClose={() => { 
+                  setEditCatDialogOpen(false); 
+                  setEditFieldErrors({}); 
+                  setEditCatError(''); 
+                }} fullWidth maxWidth="sm" TransitionComponent={Fade} transitionDuration={{ enter: 200, exit: 100 }}>
                   <DialogTitle>Edit category</DialogTitle>
                   <DialogContent>
                     {editCatError && <Alert severity="error" sx={{ mb: 1 }}>{editCatError}</Alert>}
@@ -2861,8 +2865,8 @@ export default function AdminPage() {
                                       </Box>
                                       {!isClosed && (
                                         <Box sx={{ mt: 1 }}>
-                                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'flex-start' }}>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
                                               <Typography variant="caption" sx={{ color: 'text.secondary' }}>Opening</Typography>
                                               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                                                 <TimeInput
@@ -2888,23 +2892,23 @@ export default function AdminPage() {
                                               </Box>
                                             </Box>
 
-                                            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
-                                              <Button size="small" variant="text" onClick={() => {
+                                            <Box sx={{ display: 'flex', alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
+                                              <Button size="small" variant="text" fullWidth={window.innerWidth < 600} onClick={() => {
                                                 setEditCatForm((prev) => {
                                                   const bh = { ...(prev.break_hours || {}) };
                                                   if (bh[day] && bh[day].length > 0) bh[day] = [];
                                                   else bh[day] = [['13:00','14:00']];
                                                   return { ...prev, break_hours: bh };
                                                 });
-                                              }} sx={{ color: 'primary.main', textTransform: 'none', fontSize: 13 }}>{br && br.length > 0 ? 'Remove break' : 'Add break'}</Button>
+                                              }} sx={{ color: 'primary.main', textTransform: 'none', fontSize: 13, whiteSpace: 'nowrap' }}>{br && br.length > 0 ? 'Remove break' : 'Add break'}</Button>
                                             </Box>
                                           </Box>
                                         </Box>
                                       )}
                                       {br && br.length > 0 && (
-                                        <Box sx={{ mt: 1 }}>
-                                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
+                                        <Box sx={{ mt: 1, pl: { xs: 0, sm: 1 } }}>
+                                          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'flex-start' }}>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, flex: 1, minWidth: 0 }}>
                                               <Typography variant="caption" sx={{ color: 'warning.dark' }}>Break</Typography>
                                               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', bgcolor: '#fff7e6', p: 0.5, borderRadius: 1 }}>
                                                 <TimeInput
@@ -2959,8 +2963,8 @@ export default function AdminPage() {
                     <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Categories</Typography>
                     <Stack spacing={1}>
                       {currentOrg.categories.map((cat) => (
-                        <Paper key={`org-cat-${cat.id}`} elevation={0} sx={{ p: 1.5, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                          <Box>
+                        <Paper key={`org-cat-${cat.id}`} elevation={0} sx={{ p: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: 'flex-start', border: '1px solid', borderColor: 'divider', borderRadius: 2, position: 'relative', minHeight: { xs: 'auto', sm: 140 } }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography variant="body1" fontWeight={700}>{cat.name || cat.description || `Category #${cat.id}`}</Typography>
                             <Typography variant="caption" color="text.secondary">Type: {cat.type || 'general'} {cat.is_scheduled ? ' • Scheduled' : ''}</Typography>
                             {/* Assigned admins for this category */}
@@ -2980,15 +2984,16 @@ export default function AdminPage() {
                               ))}
                             </Box>
                           </Box>
-                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Button size="small" onClick={() => { setEditingUserId(null); setCreateUserDialogOpen(true); setCreateUserForm({ first_name: '', last_name: '', email: '', phone: '', category_ids: [cat.id] }); }}>Create Admin</Button>
-                            <Button size="small" variant="outlined" onClick={() => handleOpenEditCat(cat)}>Edit</Button>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', alignSelf: { xs: 'stretch', sm: 'flex-start' }, width: { xs: '100%', sm: 'auto' } }}>
+                            <Button size="small" onClick={() => { setEditingUserId(null); setCreateUserDialogOpen(true); setCreateUserForm({ first_name: '', last_name: '', email: '', phone: '', category_ids: [cat.id] }); }} fullWidth={window.innerWidth < 600}>Create Admin</Button>
+                            <Button size="small" variant="outlined" onClick={() => handleOpenEditCat(cat)} fullWidth={window.innerWidth < 600}>Edit</Button>
                             <FormControlLabel
                               control={<Switch checked={cat.status === 'active'} onChange={() => handleToggleStatus(cat)} />}
                               label={<Typography variant="body2" fontWeight={600}>{cat.status === 'active' ? '🟢 Active' : '🔴 Inactive'}</Typography>}
+                              sx={{ m: 0, minWidth: { xs: '100%', sm: 'auto' } }}
                             />
                             {canManageOrg(cat.organization) && (
-                              <Button size="small" color="error" variant="outlined" onClick={() => { setDeleteTarget(cat); setDeleteConfirmOpen(true); }}>Delete</Button>
+                              <Button size="small" color="error" variant="outlined" onClick={() => { setDeleteTarget(cat); setDeleteConfirmOpen(true); }} fullWidth={window.innerWidth < 600}>Delete</Button>
                             )}
                           </Box>
                         </Paper>
