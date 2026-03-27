@@ -3,11 +3,11 @@
 # Build stage
 FROM node:18-alpine AS builder
 WORKDIR /app
-ENV CI=true
+ENV CI=true NODE_ENV=production
 
-# Install deps
+# Install deps - try npm ci first, fallback to npm install
 COPY package.json package-lock.json ./
-RUN npm ci --silent
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
 # Copy sources and build
 COPY . .
@@ -26,3 +26,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
+
