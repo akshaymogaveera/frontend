@@ -5,9 +5,9 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 ENV CI=true NODE_ENV=production
 
-# Install deps - try npm ci first, fallback to npm install
+# Install deps with retry logic
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps 2>&1 || npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps --prefer-offline --no-audit 2>&1 || npm install --legacy-peer-deps
 
 # Copy sources and build
 COPY . .
@@ -15,7 +15,7 @@ RUN npm run build
 
 # Production stage - nginx
 FROM nginx:stable-alpine
-LABEL org.opencontainers.image.source="https://github.com/akshaymogaveera/sqip"
+LABEL org.opencontainers.image.source="https://github.com/akshaymogaveera/sqip-frontend"
 
 # Remove default nginx files and copy built app
 RUN rm -rf /usr/share/nginx/html/*
@@ -26,4 +26,5 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
+
 
