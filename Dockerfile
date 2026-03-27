@@ -7,7 +7,7 @@ ENV CI=true NODE_ENV=production
 
 # Install deps - try npm ci first, fallback to npm install
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps 2>&1 || npm install --legacy-peer-deps
 
 # Copy sources and build
 COPY . .
