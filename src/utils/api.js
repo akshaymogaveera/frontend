@@ -3,8 +3,10 @@
  * Centralize all API endpoints and fetch logic for easier maintenance and testing.
  */
 
-// API base URL (relative so it works in dev and production)
-export const API_BASE = '/api';
+// API base URL - use environment variable if available (for production with separate backend)
+// Otherwise use relative path (for development with proxied backend or same-domain backend)
+const REACT_APP_API_BASE = process.env.REACT_APP_API_BASE;
+export const API_BASE = REACT_APP_API_BASE || '/api';
 
 // Endpoint paths (grouped by domain for clarity)
 export const ENDPOINTS = {
