@@ -19,7 +19,7 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PhoneOutlinedIcon from '@mui/icons-material/PhoneOutlined';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
-import { parseJwt } from '../utils/api.js';
+import { parseJwt, API_BASE, ENDPOINTS } from '../utils/api.js';
 
 /* ──────────────────────────────────────────
    Country dial-code list (shared constant)
@@ -123,7 +123,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
 
   const postLoginRedirect = async (accessToken) => {
     try {
-      const res = await fetch('/api/me/', { headers: { Authorization: `Bearer ${accessToken}` } });
+      const res = await fetch(ENDPOINTS.ME, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (res.ok) {
         const me = await res.json();
         localStorage.setItem('isStaff', me.is_staff || me.is_superuser ? 'true' : 'false');
@@ -195,7 +195,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
     setRegLoading(true);
     try {
       const fullPhone = `${regCountry.dial}${regPhone.trim()}`;
-      const res = await fetch('/api/register/', {
+      const res = await fetch(ENDPOINTS.REGISTER, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -236,7 +236,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
       const identifier = loginUsePhone
         ? `${loginCountry.dial}${loginIdentifier.trim()}`
         : loginIdentifier.trim();
-      const res = await fetch('/api/auth/', {
+      const res = await fetch(ENDPOINTS.AUTH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier }),
@@ -260,7 +260,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
     setOtpError('');
     setOtpLoading(true);
     try {
-      const res = await fetch('/api/send/otp/', {
+      const res = await fetch(ENDPOINTS.SEND_OTP, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: otpEmail }),
@@ -278,7 +278,7 @@ function LoginForm({ redirectFrom = '/', preSelectOrg = null, preSelectCat = nul
     setOtpError('');
     setOtpLoading(true);
     try {
-      const res = await fetch('/api/verify/otp/', {
+      const res = await fetch(ENDPOINTS.VERIFY_OTP, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: otpEmail, otp }),
