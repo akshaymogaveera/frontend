@@ -1,12 +1,13 @@
 # Frontend multi-stage Dockerfile: build React app then serve with nginx
+# Updated: 2026-03-30 - Force cache invalidation
 
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /app
 ENV CI=true NODE_ENV=production
 
 # Install system dependencies
-RUN apk add --no-cache git
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Configure npm for better reliability
 RUN npm config set registry https://registry.npmjs.org/
@@ -18,14 +19,16 @@ RUN npm config set network-timeout 300000
 COPY package.json package-lock.json ./
 
 # Install dependencies with fallback
-RUN npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund || npm install --legacy-peer-deps
+RUN echo "Starting npm install..." && \
+    npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund && \
+    echo "npm install completed successfully"
 
 # Copy sources and build
 COPY . .
 RUN npm run build
 
 # Production stage - nginx
-FROM nginx:stable-alpine
+FROM nginx:stable
 LABEL org.opencontainers.image.source="https://github.com/akshaymogaveera/sqip-frontend"
 
 # Remove default nginx files and copy built app
