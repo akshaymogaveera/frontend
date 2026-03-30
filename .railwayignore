@@ -1,0 +1,5 @@
+Dockerfile
+Dockerfile.backup
+docker-compose.yml
+.dockerignore
+nginx.conf
