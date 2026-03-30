@@ -7,7 +7,7 @@ ENV CI=true NODE_ENV=production
 
 # Install deps with retry logic
 COPY package.json package-lock.json ./
-RUN npm install --legacy-peer-deps --prefer-offline --no-audit 2>&1 || npm install --legacy-peer-deps
+RUN npm ci --silent
 
 # Copy sources and build
 COPY . .
