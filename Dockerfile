@@ -5,15 +5,20 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 ENV CI=true NODE_ENV=production
 
-# Install deps with retry logic and network optimizations
+# Install system dependencies
+RUN apk add --no-cache git
+
+# Configure npm for better reliability
+RUN npm config set registry https://registry.npmjs.org/
+RUN npm config set fetch-retry-mintimeout 20000
+RUN npm config set fetch-retry-maxtimeout 120000
+RUN npm config set network-timeout 300000
+
+# Copy package files
 COPY package.json package-lock.json ./
-RUN apk add --no-cache git && \
-    npm config set registry https://registry.npmjs.org/ && \
-    npm config set fetch-retry-mintimeout 20000 && \
-    npm config set fetch-retry-maxtimeout 120000 && \
-    npm config set network-timeout 300000 && \
-    (npm ci --prefer-offline --no-audit --no-fund --silent || \
-     npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund --silent)
+
+# Install dependencies with fallback
+RUN npm install --legacy-peer-deps --prefer-offline --no-audit --no-fund || npm install --legacy-peer-deps
 
 # Copy sources and build
 COPY . .
