@@ -3,10 +3,11 @@
  * Centralize all API endpoints and fetch logic for easier maintenance and testing.
  */
 
-// API base URL - use environment variable if available (for production with separate backend)
-// Otherwise use relative path (for development with proxied backend or same-domain backend)
+// API base URL - use environment variable if available (set at build time in Railway).
+// Falls back to the known production backend URL so the app works even if the
+// env var is missing from the build environment.
 const REACT_APP_API_BASE = process.env.REACT_APP_API_BASE;
-export const API_BASE = REACT_APP_API_BASE || '/api';
+export const API_BASE = REACT_APP_API_BASE || 'https://sqip-production.up.railway.app/api';
 
 // Endpoint paths (grouped by domain for clarity)
 export const ENDPOINTS = {
