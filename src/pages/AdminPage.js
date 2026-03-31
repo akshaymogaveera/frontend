@@ -637,15 +637,8 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
         try {
           const dates = Array.from(new Set(
             (appts || [])
-              .filter((a) => a.scheduled_time_display || a.scheduled_time)
-              .map((a) => {
-                // Prefer scheduled_time_display ('YYYY-MM-DD HH:MM') as it's already
-                // in the category timezone. Fall back to the UTC scheduled_time field.
-                if (a.scheduled_time_display && typeof a.scheduled_time_display === 'string') {
-                  return a.scheduled_time_display.split(' ')[0];
-                }
-                return typeof a.scheduled_time === 'string' ? a.scheduled_time.split('T')[0] : '';
-              })
+              .filter((a) => a.scheduled_time)
+              .map((a) => (typeof a.scheduled_time === 'string' ? a.scheduled_time.split('T')[0] : ''))
               .filter(Boolean)
           ));
           // Sort ascending
@@ -717,15 +710,9 @@ function AppointmentList({ category, apptType, refreshKey = null }) {
 
   const showToast = (msg, severity = 'success') => setToast({ open: true, msg, severity });
   // Compute the currently displayed appointments after applying the date filter
-  const filteredAppointments = (appointments || []).filter((a) => {
-    if (dateFilter === 'all') return true;
-    // Use scheduled_time_display (category-tz 'YYYY-MM-DD HH:MM') for accurate date comparison
-    if (a.scheduled_time_display && typeof a.scheduled_time_display === 'string') {
-      return a.scheduled_time_display.split(' ')[0] === dateFilter;
-    }
-    if (!a.scheduled_time) return true;
-    return a.scheduled_time.split('T')[0] === dateFilter;
-  });
+  const filteredAppointments = (appointments || []).filter((a) =>
+    dateFilter === 'all' || !a.scheduled_time || a.scheduled_time.split('T')[0] === dateFilter
+  );
 
   // Format date like "3rd March 2026"
   const formatDateLabel = (isoDate) => {
