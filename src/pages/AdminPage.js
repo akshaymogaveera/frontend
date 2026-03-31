@@ -64,9 +64,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import DownloadIcon from '@mui/icons-material/Download';
 import Navbar from '../components/Navbar.js';
-import { ENDPOINTS, apiCall } from '../utils/api.js';
-
-const API_BASE = '/api';
+import { ENDPOINTS, apiCall, API_BASE } from '../utils/api.js';
 
 /**
  * Parse an API error response body into a human-readable string.
@@ -126,7 +124,7 @@ const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'ima
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 function NotesPanel({ appt, token }) {
-  const API_BASE_NOTES = '/api';
+  const API_BASE_NOTES = API_BASE;
   const [notes, setNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [noteText, setNoteText] = useState('');

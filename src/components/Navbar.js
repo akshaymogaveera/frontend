@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLoginModal } from '../contexts/LoginModalContext.js';
-import { ENDPOINTS, apiCall } from '../utils/api.js';
+import { ENDPOINTS, apiCall, API_BASE } from '../utils/api.js';
 import {
   AppBar,
   Toolbar,
@@ -80,7 +80,7 @@ function Navbar() {
           setIsAdmin(false);
           return;
         }
-        const res = await fetch('/api/me/', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`${API_BASE}/me/`, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) {
           localStorage.clear();
           setIsLoggedIn(false);

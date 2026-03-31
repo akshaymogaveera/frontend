@@ -20,8 +20,7 @@ import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import { formatDate, formatServerDateTime } from '../utils/timezone.js';
-
-const API_BASE = '/api';
+import { API_BASE } from '../utils/api.js';
 
 /**
  * Full scheduling dialog: category info, React calendar, slot picker,

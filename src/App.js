@@ -8,7 +8,7 @@ import AppointmentsPage from './pages/AppointmentsPage.js';
 import AdminPage from './pages/AdminPage.js';
 import ProfilePage from './pages/ProfilePage.js';
 import OrgBookingPage from './pages/OrgBookingPage.js';
-import { parseJwt } from './utils/api.js';
+import { parseJwt, API_BASE } from './utils/api.js';
 
 const theme = createTheme({
   palette: {
@@ -115,7 +115,7 @@ function App() {
       try {
         // Try cookie-based refresh (backend will also accept JSON body for
         // backward compatibility). Use credentials so the HttpOnly cookie is sent.
-        const res = await fetch('/api/token/refresh/', {
+        const res = await fetch(`${API_BASE}/token/refresh/`, {
           method: 'POST',
           credentials: 'include',
         });
